@@ -7,7 +7,7 @@ import { useRecurrentsStore } from '~/stores/useRecurrents'
 import { useInvestmentsStore } from '~/stores/useInvestments'
 import { parseBRLToCents } from '~/utils/money'
 import { nowISO } from '~/utils/dates'
-import { Alert, AlertDescription, AlertTitle } from './ui/alert'
+import { Alert, AlertDescription, AlertTitle } from '../ui/alert'
 
 const emit = defineEmits<{ saved: [] }>()
 

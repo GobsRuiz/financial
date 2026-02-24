@@ -1,5 +1,5 @@
 <script setup lang="ts">
-defineProps<{
+const props = defineProps<{
   open: boolean
   title?: string
   description?: string
@@ -12,28 +12,33 @@ const emit = defineEmits<{
   confirm: []
   cancel: []
 }>()
+
+function onOpenChange(value: boolean) {
+  if (!value) emit('cancel')
+}
 </script>
 
 <template>
-  <AlertDialog :open="open">
-    <AlertDialogContent>
-      <AlertDialogHeader>
-        <AlertDialogTitle>{{ title ?? 'Confirmar' }}</AlertDialogTitle>
-        <AlertDialogDescription>
+  <Dialog :open="open" @update:open="onOpenChange">
+    <DialogContent>
+      <DialogHeader>
+        <DialogTitle>{{ title ?? 'Confirmar' }}</DialogTitle>
+        <DialogDescription>
           {{ description ?? 'Tem certeza que deseja continuar?' }}
-        </AlertDialogDescription>
-      </AlertDialogHeader>
-      <AlertDialogFooter>
-        <AlertDialogCancel @click="emit('cancel')">
+        </DialogDescription>
+      </DialogHeader>
+      <div class="flex justify-end gap-2 pt-4">
+        <Button variant="outline" @click="emit('cancel')">
           {{ cancelLabel ?? 'Cancelar' }}
-        </AlertDialogCancel>
-        <AlertDialogAction
-          :class="destructive ? 'bg-destructive text-white hover:bg-destructive/90' : ''"
+        </Button>
+        <Button
+          :variant="destructive ? 'destructive' : 'default'"
+          :class="destructive ? 'bg-destructive!' : ''"
           @click="emit('confirm')"
         >
           {{ confirmLabel ?? 'Confirmar' }}
-        </AlertDialogAction>
-      </AlertDialogFooter>
-    </AlertDialogContent>
-  </AlertDialog>
+        </Button>
+      </div>
+    </DialogContent>
+  </Dialog>
 </template>

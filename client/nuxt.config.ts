@@ -11,6 +11,7 @@ export default defineNuxtConfig({
     '@pinia/nuxt',
     '@nuxt/fonts',
     '@vee-validate/nuxt',
+    'vue-sonner/nuxt',
   ],
 
   css: ['~/assets/css/tailwind.css'],

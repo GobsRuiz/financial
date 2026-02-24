@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Save, AlertCircleIcon } from 'lucide-vue-next'
-import { Alert, AlertDescription } from './ui/alert'
+import { Alert, AlertDescription } from '../ui/alert'
 import type { Account } from '~/schemas/zod-schemas'
 import { useAccountsStore } from '~/stores/useAccounts'
 import { parseBRLToCents } from '~/utils/money'
