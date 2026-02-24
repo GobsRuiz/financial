@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Save } from 'lucide-vue-next'
+import {AlertCircleIcon } from 'lucide-vue-next'
 import { useAccountsStore } from '~/stores/useAccounts'
 import { useTagsStore } from '~/stores/useTags'
 import { useTransactionsStore } from '~/stores/useTransactions'
@@ -7,6 +7,7 @@ import { useRecurrentsStore } from '~/stores/useRecurrents'
 import { useInvestmentsStore } from '~/stores/useInvestments'
 import { parseBRLToCents } from '~/utils/money'
 import { nowISO } from '~/utils/dates'
+import { Alert, AlertDescription, AlertTitle } from './ui/alert'
 
 const emit = defineEmits<{ saved: [] }>()
 
@@ -256,7 +257,7 @@ const kindOptions = [
             <!-- Valor -->
             <div class="space-y-2">
               <Label>Valor *</Label>
-              <Input v-model="txForm.amount" placeholder="R$ 0,00" />
+              <MoneyInput v-model="txForm.amount" />
             </div>
 
             <!-- Data -->
@@ -356,7 +357,7 @@ const kindOptions = [
 
             <div class="space-y-2">
               <Label>Valor *</Label>
-              <Input v-model="recForm.amount" placeholder="R$ 0,00" />
+              <MoneyInput v-model="recForm.amount" />
             </div>
 
             <div class="space-y-2">
@@ -412,12 +413,12 @@ const kindOptions = [
 
             <div class="space-y-2">
               <Label>Valor Aplicado *</Label>
-              <Input v-model="invForm.applied" placeholder="R$ 0,00" />
+              <MoneyInput v-model="invForm.applied" />
             </div>
 
             <div class="space-y-2">
               <Label>Valor Atual</Label>
-              <Input v-model="invForm.current" placeholder="R$ 0,00 (opcional)" />
+              <MoneyInput v-model="invForm.current" placeholder="0,00 (opcional)" />
             </div>
 
             <div class="col-span-2 space-y-2">
@@ -428,7 +429,10 @@ const kindOptions = [
         </template>
 
         <!-- Erro -->
-        <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
+        <Alert v-if="error" variant="destructive">
+          <AlertCircleIcon class="size-4" />
+          <AlertDescription>{{ error }}</AlertDescription>
+        </Alert>
 
         <!-- Submit -->
         <Button type="submit" :disabled="loading" class="w-full">

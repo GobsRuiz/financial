@@ -114,12 +114,14 @@
   * [x] topo: select tipo (Transação / Recorrente / Investimento)
   * [x] render form dinâmico conforme tipo
   * [x] render lista abaixo + filtros
+  * [x] Dialog para formulário (Nova Movimentação)
+  * [x] Skeleton loading completo
 
 ## 1.6 Form Dinâmico (Movimentação) ✅ CONCLUÍDA
 
 * [x] `app/components/MovimentacaoForm.vue`
 
-  * [x] Select "tipo de movimentação" (ou receber por prop)
+  * [x] Tabs para tipo de movimentação (Transação/Recorrente/Investimento)
   * [x] Form "Transação":
 
     * [x] conta, tipo (expense/income/transfer), categoria, valor, data
@@ -140,7 +142,12 @@
 
 * [x] `app/components/MovimentacoesList.vue`
 
-  * [x] filtros: conta, mês, tipo, tags, categoria, status (pago/pendente)
+  * [x] Tabs por tipo (Transações/Recorrentes/Investimentos) com badge de contagem
+  * [x] Filtros contextuais por tab (collapsible com estado persistente):
+    * [x] Transações: Conta + Mês + Status (Pago/Pendente)
+    * [x] Recorrentes: Conta + Status (Ativo/Inativo)
+    * [x] Investimentos: Conta
+  * [x] Botão "Limpar filtros" (só aparece quando tem filtro ativo)
   * [x] item transação parcelada aparece como resumo
   * [x] botão expandir
 * [x] `app/components/ParcelasExpansion.vue`
@@ -150,94 +157,100 @@
 
 ---
 
-# 2) Módulo 2 — PENDENTES (segundo)
+# 2) Módulo 2 — PENDENTES (segundo) ✅ CONCLUÍDA
 
-## 2.1 Página Pendentes
+## 2.1 Página Pendentes ✅ CONCLUÍDA
 
-* [ ] Criar `app/pages/pendentes.vue`
+* [x] Criar `app/pages/pendentes.vue`
 
-  * [ ] header: mês selecionado (navegação com setas)
-  * [ ] cards: total pendente / total pago / saldo previsto
-  * [ ] lista de pendentes (scroll interno)
-  * [ ] filtros: conta, tipo (recorrente/transação)
+  * [x] header: mês selecionado (navegação com setas)
+  * [x] cards: Saldo (receitas do mês) / Total Pendente (despesas a pagar) / Total Pago (despesas pagas)
+  * [x] Skeleton loading (cards + lista)
+  * [x] `app/components/PendentesList.vue` com lista unificada + filtros collapsible (Conta + Tipo)
 
-## 2.2 Gerar itens pendentes do mês
+## 2.2 Gerar itens pendentes do mês ✅ CONCLUÍDA
 
-* [ ] `useTransactions`:
+* [x] `useTransactions`:
 
-  * [ ] getter `unpaidForMonth(month)` retorna transações não pagas do mês
-* [ ] Combinar transações não pagas + recorrentes ativos numa lista unificada
-* [ ] `recurrentId` adicionado ao transactionSchema para vincular recorrente à transação criada
-* [ ] Pendente do tipo "recurrent" ao marcar "pago" -> cria transaction daquele mês e já paga
+  * [x] `unpaidForMonth(month)` retorna transações não pagas do mês
+  * [x] `hasRecurrentTransaction(recurrentId, month)` verifica duplicata
+  * [x] `payRecurrent(rec, month)` cria transaction + paga + ajusta saldo + history
+* [x] Combinar transações não pagas + recorrentes ativos numa lista unificada
+* [x] `recurrentId` já existia no transactionSchema
 
-## 2.3 Marcar pago (efeito completo)
+## 2.3 Marcar pago (efeito completo) ✅ CONCLUÍDA
 
-* [ ] Ao marcar pago:
+* [x] Ao marcar pago:
 
-  * [ ] transaction: PATCH paid + update balance + history
-  * [ ] recurrent: criar transaction + marcar pago + update balance + history
-
----
-
-# 3) Módulo 3 — SETTINGS (terceiro)
-
-## 3.1 Página Settings
-
-* [ ] Criar `app/pages/settings.vue`
-
-  * [ ] botão "Limpar histórico"
-  * [ ] modal confirm
-* [ ] Implementar "limpar":
-
-  * [ ] DELETE collections no json-server (ou sobrescrever db.json via script dev)
-  * [ ] no MVP: criar helper que faz "reset" via várias requisições DELETE (ou setar arrays vazias)
+  * [x] transaction: PATCH paid + update balance + history (via markPaid)
+  * [x] recurrent: criar transaction + marcar pago + update balance + history (via payRecurrent)
 
 ---
 
-# 4) Módulo 4 — CONTAS (quarto)
+# 3) Módulo 3 — SETTINGS (terceiro) ✅ CONCLUÍDA
 
-## 4.1 Página Contas
+## 3.1 Página Settings ✅ CONCLUÍDA
 
-* [ ] Criar `app/pages/contas.vue`
+* [x] Criar `app/pages/settings.vue`
 
-  * [ ] lista de accounts
-  * [ ] botão adicionar
-  * [ ] editar account (modal)
-* [ ] `app/components/AccountFormModal.vue`
-
-  * [ ] bank, label, saldo
-  * [ ] card_closing_day (opcional)
-  * [ ] card_due_day (opcional)
+  * [x] botão "Limpar dados" com AlertDialog de confirmação (destructive)
+  * [x] Deleta todos os itens de cada collection via API
+  * [x] Limpa stores locais após reset
+  * [x] Feedback visual de sucesso
 
 ---
 
-# 5) Módulo 5 — DASHBOARD (quinto)
+# 4) Módulo 4 — CONTAS (quarto) ✅ CONCLUÍDA
 
-## 5.1 Página Dashboard
+## 4.1 Página Contas ✅ CONCLUÍDA
 
-* [ ] Atualizar `app/pages/index.vue`
+* [x] Criar `app/pages/contas.vue`
 
-  * [ ] cards: entradas mês, saídas mês, saldo, guardado/investido, pendente
-  * [ ] mini gráficos com Nuxt Charts (bem simples)
-  * [ ] lista últimas movimentações (top 10)
-* [ ] Cálculos:
+  * [x] lista de accounts em cards (grid 2 colunas)
+  * [x] botão "Nova Conta" abre Dialog
+  * [x] botão editar em cada card abre Dialog com dados preenchidos
+  * [x] Skeleton loading
+* [x] `app/components/AccountFormModal.vue`
 
-  * [ ] entradas = soma income mês
-  * [ ] saídas = soma expense mês
-  * [ ] pendentes = unpaid do mês
-  * [ ] saldo total = soma balances
+  * [x] bank, label, saldo
+  * [x] card_closing_day (opcional)
+  * [x] card_due_day (opcional)
+  * [x] modo criar/editar com watch na prop account
 
 ---
 
-# 6) Módulo 6 — HISTÓRICO (último)
+# 5) Módulo 5 — DASHBOARD (quinto) ✅ CONCLUÍDA
 
-## 6.1 Página Histórico
+## 5.1 Página Dashboard ✅ CONCLUÍDA
 
-* [ ] Criar `app/pages/historico.vue`
+* [x] Atualizar `app/pages/index.vue`
 
-  * [ ] tabs: Transactions / Recurrents / Investments / Balance history
-  * [ ] filtros e busca
-* [ ] Nuxt Charts: evolução de saldo por mês (baseado em `history`)
+  * [x] 5 cards: Entradas, Saídas, Saldo Total, Investido, Pendentes (com ícones Lucide)
+  * [ ] mini gráficos com Nuxt Charts (futuro — lib não instalada)
+  * [x] lista últimas movimentações (top 10) com tabela
+  * [x] Skeleton loading
+* [x] Cálculos:
+
+  * [x] entradas = soma income mês
+  * [x] saídas = soma expense mês
+  * [x] pendentes = unpaid do mês + recorrentes sem tx
+  * [x] saldo total = soma balances
+  * [x] investido = soma applied_cents
+
+---
+
+# 6) Módulo 6 — HISTÓRICO (último) ✅ CONCLUÍDA
+
+## 6.1 Página Histórico ✅ CONCLUÍDA
+
+* [x] Criar `app/pages/historico.vue`
+
+  * [x] 4 tabs: Transações / Recorrentes / Investimentos / Saldo (balance history)
+  * [x] Filtros collapsible por tab (Conta) com estado persistente
+  * [x] Busca global (campo no header)
+  * [x] Skeleton loading
+  * [x] Badges de contagem por tab
+* [ ] Nuxt Charts: evolução de saldo por mês (futuro — lib não instalada)
 
 ---
 

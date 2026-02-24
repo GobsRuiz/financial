@@ -1,7 +1,21 @@
 {
   "accounts": [
-    { "id": 1, "bank": "nubank", "label": "Nubank", "type": "bank", "balance_cents": 485000, "card_closing_day": 25, "card_due_day": 10 },
-    { "id": 2, "bank": "inter", "label": "Inter", "type": "bank", "balance_cents": 320000 }
+    {
+      "id": 1,
+      "bank": "nubank",
+      "label": "Nubank",
+      "type": "bank",
+      "balance_cents": 1809000,
+      "card_closing_day": 25,
+      "card_due_day": 10
+    },
+    {
+      "id": 2,
+      "bank": "inter",
+      "label": "Inter",
+      "type": "bank",
+      "balance_cents": 584000
+    }
   ],
   "transactions": [
     {
@@ -12,7 +26,10 @@
       "category": "supermercado",
       "amount_cents": -18500,
       "description": "Compras da semana",
-      "tags": ["mercado", "alimentação"],
+      "tags": [
+        "mercado",
+        "alimentação"
+      ],
       "paid": true,
       "installment": null
     },
@@ -24,7 +41,9 @@
       "category": "salário",
       "amount_cents": 650000,
       "description": "Salário fevereiro",
-      "tags": ["salário"],
+      "tags": [
+        "salário"
+      ],
       "paid": true,
       "installment": null
     },
@@ -36,7 +55,9 @@
       "category": "transporte",
       "amount_cents": -5500,
       "description": "Uber",
-      "tags": ["transporte"],
+      "tags": [
+        "transporte"
+      ],
       "paid": true,
       "installment": null
     },
@@ -48,9 +69,16 @@
       "category": "eletrônicos",
       "amount_cents": -25000,
       "description": "",
-      "tags": ["casa"],
+      "tags": [
+        "casa"
+      ],
       "paid": true,
-      "installment": { "parentId": "parc-001", "total": 10, "index": 1, "product": "Geladeira" }
+      "installment": {
+        "parentId": "parc-001",
+        "total": 10,
+        "index": 1,
+        "product": "Geladeira"
+      }
     },
     {
       "id": "tx-005",
@@ -60,9 +88,16 @@
       "category": "eletrônicos",
       "amount_cents": -25000,
       "description": "",
-      "tags": ["casa"],
-      "paid": false,
-      "installment": { "parentId": "parc-001", "total": 10, "index": 2, "product": "Geladeira" }
+      "tags": [
+        "casa"
+      ],
+      "paid": true,
+      "installment": {
+        "parentId": "parc-001",
+        "total": 10,
+        "index": 2,
+        "product": "Geladeira"
+      }
     },
     {
       "id": "tx-006",
@@ -72,9 +107,16 @@
       "category": "eletrônicos",
       "amount_cents": -25000,
       "description": "",
-      "tags": ["casa"],
+      "tags": [
+        "casa"
+      ],
       "paid": false,
-      "installment": { "parentId": "parc-001", "total": 10, "index": 3, "product": "Geladeira" }
+      "installment": {
+        "parentId": "parc-001",
+        "total": 10,
+        "index": 3,
+        "product": "Geladeira"
+      }
     },
     {
       "id": "tx-007",
@@ -84,7 +126,9 @@
       "category": "lazer",
       "amount_cents": -8900,
       "description": "Cinema + pipoca",
-      "tags": ["lazer"],
+      "tags": [
+        "lazer"
+      ],
       "paid": true,
       "installment": null
     },
@@ -96,8 +140,10 @@
       "category": "saúde",
       "amount_cents": -15000,
       "description": "Farmácia",
-      "tags": ["saúde"],
-      "paid": false,
+      "tags": [
+        "saúde"
+      ],
+      "paid": true,
       "installment": null
     },
     {
@@ -108,33 +154,385 @@
       "category": "freelance",
       "amount_cents": 120000,
       "description": "Projeto site cliente",
-      "tags": ["freelance"],
+      "tags": [
+        "freelance"
+      ],
       "paid": true,
       "installment": null
+    },
+    {
+      "accountId": 1,
+      "date": "2026-02-24",
+      "type": "expense",
+      "category": "Supermercado",
+      "amount_cents": -10000,
+      "tags": [
+        "mercado"
+      ],
+      "paid": true,
+      "installment": null,
+      "id": "7382fe1e-e1f7-4870-a6a2-31f751fe895e"
+    },
+    {
+      "accountId": 1,
+      "date": "2026-02-05",
+      "type": "expense",
+      "category": "Academia",
+      "amount_cents": -12000,
+      "description": "Smart Fit",
+      "paid": true,
+      "installment": null,
+      "recurrentId": "rec-001",
+      "id": "e75e917d-bc11-4ee8-b6da-975871624a27"
+    },
+    {
+      "accountId": 1,
+      "date": "2026-02-10",
+      "type": "expense",
+      "category": "Aluguel",
+      "amount_cents": -180000,
+      "paid": true,
+      "installment": null,
+      "recurrentId": "rec-002",
+      "id": "23e9418f-db2f-4ced-aaf0-c4905abd0ad2"
+    },
+    {
+      "accountId": 1,
+      "date": "2026-02-05",
+      "type": "income",
+      "category": "Salário",
+      "amount_cents": 650000,
+      "description": "CLT",
+      "paid": true,
+      "installment": null,
+      "recurrentId": "rec-003",
+      "id": "27984f83-305c-4b09-b5fa-c873f8e88caa"
+    },
+    {
+      "accountId": 2,
+      "date": "2026-02-01",
+      "type": "income",
+      "category": "Vale Refeição",
+      "amount_cents": 88000,
+      "description": "Sodexo",
+      "paid": true,
+      "installment": null,
+      "recurrentId": "rec-004",
+      "id": "97084a86-7ad1-4ef2-997f-1c792345ca7a"
+    },
+    {
+      "accountId": 1,
+      "date": "2026-01-05",
+      "type": "expense",
+      "category": "Academia",
+      "amount_cents": -12000,
+      "description": "Smart Fit",
+      "paid": true,
+      "installment": null,
+      "recurrentId": "rec-001",
+      "id": "a365617b-dcdc-412f-ada4-2e347b030453"
+    },
+    {
+      "accountId": 1,
+      "date": "2026-01-10",
+      "type": "expense",
+      "category": "Aluguel",
+      "amount_cents": -180000,
+      "paid": true,
+      "installment": null,
+      "recurrentId": "rec-002",
+      "id": "af23402b-c63b-4285-9adf-3395312bd8f6"
+    },
+    {
+      "accountId": 1,
+      "date": "2026-01-05",
+      "type": "income",
+      "category": "Salário",
+      "amount_cents": 650000,
+      "description": "CLT",
+      "paid": true,
+      "installment": null,
+      "recurrentId": "rec-003",
+      "id": "bff3e755-4010-4196-9630-6d95e1b6c147"
+    },
+    {
+      "accountId": 2,
+      "date": "2026-01-01",
+      "type": "income",
+      "category": "Vale Refeição",
+      "amount_cents": 88000,
+      "description": "Sodexo",
+      "paid": true,
+      "installment": null,
+      "recurrentId": "rec-004",
+      "id": "3fabb7de-773d-44f8-9f9b-be0867d7380b"
+    },
+    {
+      "accountId": 1,
+      "date": "2026-03-05",
+      "type": "expense",
+      "category": "Academia",
+      "amount_cents": -12000,
+      "description": "Smart Fit",
+      "paid": true,
+      "installment": null,
+      "recurrentId": "rec-001",
+      "id": "2f7abd94-00db-4616-9015-1a51c60db4b3"
+    },
+    {
+      "accountId": 1,
+      "date": "2026-03-10",
+      "type": "expense",
+      "category": "Aluguel",
+      "amount_cents": -180000,
+      "paid": true,
+      "installment": null,
+      "recurrentId": "rec-002",
+      "id": "da966481-5c29-4104-91c5-5b4192ffd900"
+    },
+    {
+      "accountId": 1,
+      "date": "2026-03-05",
+      "type": "income",
+      "category": "Salário",
+      "amount_cents": 650000,
+      "description": "CLT",
+      "paid": true,
+      "installment": null,
+      "recurrentId": "rec-003",
+      "id": "ab192800-cb5f-4ad8-ade1-cbcc860f97c1"
+    },
+    {
+      "accountId": 2,
+      "date": "2026-03-01",
+      "type": "income",
+      "category": "Vale Refeição",
+      "amount_cents": 88000,
+      "description": "Sodexo",
+      "paid": true,
+      "installment": null,
+      "recurrentId": "rec-004",
+      "id": "e08aa798-aeaf-4fe4-8b75-ca9adc1f0a93"
     }
   ],
   "recurrents": [
-    { "id": "rec-001", "accountId": 1, "kind": "expense", "name": "Academia", "amount_cents": -12000, "frequency": "monthly", "day_of_month": 5, "description": "Smart Fit", "active": true },
-    { "id": "rec-002", "accountId": 1, "kind": "expense", "name": "Aluguel", "amount_cents": -180000, "frequency": "monthly", "day_of_month": 10, "due_day": 10, "description": "", "active": true },
-    { "id": "rec-003", "accountId": 1, "kind": "income", "name": "Salário", "amount_cents": 650000, "frequency": "monthly", "day_of_month": 5, "description": "CLT", "active": true },
-    { "id": "rec-004", "accountId": 2, "kind": "benefit", "name": "Vale Refeição", "amount_cents": 88000, "frequency": "monthly", "day_of_month": 1, "description": "Sodexo", "active": true }
+    {
+      "id": "rec-001",
+      "accountId": 1,
+      "kind": "expense",
+      "name": "Academia",
+      "amount_cents": -12000,
+      "frequency": "monthly",
+      "day_of_month": 5,
+      "description": "Smart Fit",
+      "active": true
+    },
+    {
+      "id": "rec-002",
+      "accountId": 1,
+      "kind": "expense",
+      "name": "Aluguel",
+      "amount_cents": -180000,
+      "frequency": "monthly",
+      "day_of_month": 10,
+      "due_day": 10,
+      "description": "",
+      "active": true
+    },
+    {
+      "id": "rec-003",
+      "accountId": 1,
+      "kind": "income",
+      "name": "Salário",
+      "amount_cents": 650000,
+      "frequency": "monthly",
+      "day_of_month": 5,
+      "description": "CLT",
+      "active": true
+    },
+    {
+      "id": "rec-004",
+      "accountId": 2,
+      "kind": "benefit",
+      "name": "Vale Refeição",
+      "amount_cents": 88000,
+      "frequency": "monthly",
+      "day_of_month": 1,
+      "description": "Sodexo",
+      "active": true
+    }
   ],
   "investments": [
-    { "id": "inv-001", "accountId": 2, "asset_tag": "MXRF11", "applied_cents": 200000, "current_cents": 205000, "description": "FII logística" },
-    { "id": "inv-002", "accountId": 2, "asset_tag": "SELIC", "applied_cents": 500000, "current_cents": 512000, "description": "Tesouro Selic 2029" }
+    {
+      "id": "inv-001",
+      "accountId": 2,
+      "asset_tag": "MXRF11",
+      "applied_cents": 200000,
+      "current_cents": 205000,
+      "description": "FII logística"
+    },
+    {
+      "id": "inv-002",
+      "accountId": 2,
+      "asset_tag": "SELIC",
+      "applied_cents": 500000,
+      "current_cents": 512000,
+      "description": "Tesouro Selic 2029"
+    }
   ],
   "tags": [
-    { "id": "t1", "name": "mercado" },
-    { "id": "t2", "name": "alimentação" },
-    { "id": "t3", "name": "salário" },
-    { "id": "t4", "name": "transporte" },
-    { "id": "t5", "name": "casa" },
-    { "id": "t6", "name": "lazer" },
-    { "id": "t7", "name": "saúde" },
-    { "id": "t8", "name": "freelance" }
+    {
+      "id": "t1",
+      "name": "mercado"
+    },
+    {
+      "id": "t2",
+      "name": "alimentação"
+    },
+    {
+      "id": "t3",
+      "name": "salário"
+    },
+    {
+      "id": "t4",
+      "name": "transporte"
+    },
+    {
+      "id": "t5",
+      "name": "casa"
+    },
+    {
+      "id": "t6",
+      "name": "lazer"
+    },
+    {
+      "id": "t7",
+      "name": "saúde"
+    },
+    {
+      "id": "t8",
+      "name": "freelance"
+    }
   ],
   "history": [
-    { "id": "h-001", "accountId": 1, "date": "2026-02-01", "balance_cents": 500000, "note": "Saldo inicial fevereiro" },
-    { "id": "h-002", "accountId": 2, "date": "2026-02-01", "balance_cents": 300000, "note": "Saldo inicial fevereiro" }
+    {
+      "id": "h-001",
+      "accountId": 1,
+      "date": "2026-02-01",
+      "balance_cents": 500000,
+      "note": "Saldo inicial fevereiro"
+    },
+    {
+      "id": "h-002",
+      "accountId": 2,
+      "date": "2026-02-01",
+      "balance_cents": 300000,
+      "note": "Saldo inicial fevereiro"
+    },
+    {
+      "id": "e78c6ddc-966c-43a7-b678-2066192105d1",
+      "accountId": 1,
+      "date": "2026-02-24",
+      "balance_cents": 470000,
+      "note": "Farmácia"
+    },
+    {
+      "id": "d6a4b943-5176-4c4d-8014-ed17fbe51597",
+      "accountId": 1,
+      "date": "2026-02-24",
+      "balance_cents": 460000,
+      "note": "Supermercado"
+    },
+    {
+      "id": "0c06045e-21b4-421d-b892-6e2beaba0624",
+      "accountId": 1,
+      "date": "2026-02-24",
+      "balance_cents": 448000,
+      "note": "Academia"
+    },
+    {
+      "id": "e3bc0cf0-7f2b-4412-8dc3-59f20a343149",
+      "accountId": 1,
+      "date": "2026-02-24",
+      "balance_cents": 268000,
+      "note": "Aluguel"
+    },
+    {
+      "id": "78e0c24e-3a36-4bcb-9179-3fbab0c14908",
+      "accountId": 1,
+      "date": "2026-02-24",
+      "balance_cents": 918000,
+      "note": "Salário"
+    },
+    {
+      "id": "fbac9755-8750-4331-9218-f389a7fcccbb",
+      "accountId": 2,
+      "date": "2026-02-24",
+      "balance_cents": 408000,
+      "note": "Vale Refeição"
+    },
+    {
+      "id": "bdf9cbf2-0791-4094-a3f9-218ae849e89b",
+      "accountId": 1,
+      "date": "2026-02-24",
+      "balance_cents": 906000,
+      "note": "Academia"
+    },
+    {
+      "id": "dd0a9ef7-454d-4979-a380-2b23c782dd24",
+      "accountId": 1,
+      "date": "2026-02-24",
+      "balance_cents": 726000,
+      "note": "Aluguel"
+    },
+    {
+      "id": "b1f26d11-39e3-42df-b15c-73da7c43cac0",
+      "accountId": 1,
+      "date": "2026-02-24",
+      "balance_cents": 1376000,
+      "note": "Salário"
+    },
+    {
+      "id": "758bd083-f770-40ca-a33f-4c2d79a6aece",
+      "accountId": 2,
+      "date": "2026-02-24",
+      "balance_cents": 496000,
+      "note": "Vale Refeição"
+    },
+    {
+      "id": "3fe34da4-47de-4322-955c-7993b630ff62",
+      "accountId": 1,
+      "date": "2026-02-24",
+      "balance_cents": 1351000,
+      "note": "Parcela 2/10 - Geladeira"
+    },
+    {
+      "id": "2e270091-325a-41df-bbfe-5a18c995b966",
+      "accountId": 1,
+      "date": "2026-02-24",
+      "balance_cents": 1339000,
+      "note": "Academia"
+    },
+    {
+      "id": "417df071-3489-44ad-a56a-2f2508fa0c27",
+      "accountId": 1,
+      "date": "2026-02-24",
+      "balance_cents": 1159000,
+      "note": "Aluguel"
+    },
+    {
+      "id": "b7a0c0dd-9b49-4e1c-9cc8-443a8f6850ab",
+      "accountId": 1,
+      "date": "2026-02-24",
+      "balance_cents": 1809000,
+      "note": "Salário"
+    },
+    {
+      "id": "136656d1-41a7-45c7-9a41-3169310bebdd",
+      "accountId": 2,
+      "date": "2026-02-24",
+      "balance_cents": 584000,
+      "note": "Vale Refeição"
+    }
   ]
 }

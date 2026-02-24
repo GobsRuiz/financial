@@ -12,10 +12,22 @@ const recurrentsStore = useRecurrentsStore()
 const investmentsStore = useInvestmentsStore()
 const accountsStore = useAccountsStore()
 
-// Filtros
-const filterConta = ref<number | null>(null)
-const filterMes = ref('')
-const filterStatus = ref<'todos' | 'pago' | 'pendente'>('todos')
+// Estado dos filtros abertos por tab
+const txFiltersOpen = ref(false)
+const recFiltersOpen = ref(false)
+const invFiltersOpen = ref(false)
+
+// ── Filtros Transações ──
+const txFilterConta = ref<number | null>(null)
+const txFilterMes = ref('')
+const txFilterStatus = ref<'todos' | 'pago' | 'pendente'>('todos')
+
+// ── Filtros Recorrentes ──
+const recFilterConta = ref<number | null>(null)
+const recFilterStatus = ref<'todos' | 'ativo' | 'inativo'>('todos')
+
+// ── Filtros Investimentos ──
+const invFilterConta = ref<number | null>(null)
 
 // Expand state para parcelas
 const expandedParents = ref<Set<string>>(new Set())
@@ -36,15 +48,15 @@ function getAccountLabel(accountId: number) {
 const filteredTransactions = computed(() => {
   let txs = transactionsStore.transactions
 
-  if (filterConta.value) {
-    txs = txs.filter(t => t.accountId === filterConta.value)
+  if (txFilterConta.value) {
+    txs = txs.filter(t => t.accountId === txFilterConta.value)
   }
-  if (filterMes.value) {
-    txs = txs.filter(t => monthKey(t.date) === filterMes.value)
+  if (txFilterMes.value) {
+    txs = txs.filter(t => monthKey(t.date) === txFilterMes.value)
   }
-  if (filterStatus.value === 'pago') {
+  if (txFilterStatus.value === 'pago') {
     txs = txs.filter(t => t.paid)
-  } else if (filterStatus.value === 'pendente') {
+  } else if (txFilterStatus.value === 'pendente') {
     txs = txs.filter(t => !t.paid)
   }
 
@@ -61,94 +73,64 @@ const filteredTransactions = computed(() => {
 
 const filteredRecurrents = computed(() => {
   let recs = recurrentsStore.recurrents
-  if (filterConta.value) {
-    recs = recs.filter(r => r.accountId === filterConta.value)
+  if (recFilterConta.value) {
+    recs = recs.filter(r => r.accountId === recFilterConta.value)
+  }
+  if (recFilterStatus.value === 'ativo') {
+    recs = recs.filter(r => r.active)
+  } else if (recFilterStatus.value === 'inativo') {
+    recs = recs.filter(r => !r.active)
   }
   return recs
 })
 
 const filteredInvestments = computed(() => {
   let invs = investmentsStore.investments
-  if (filterConta.value) {
-    invs = invs.filter(i => i.accountId === filterConta.value)
+  if (invFilterConta.value) {
+    invs = invs.filter(i => i.accountId === invFilterConta.value)
   }
   return invs
 })
 
-const statusOptions = [
+const txStatusOptions = [
   { label: 'Todos', value: 'todos' },
   { label: 'Pago', value: 'pago' },
   { label: 'Pendente', value: 'pendente' },
 ]
 
-const hasActiveFilters = computed(() =>
-  filterConta.value !== null || filterMes.value !== '' || filterStatus.value !== 'todos'
+const recStatusOptions = [
+  { label: 'Todos', value: 'todos' },
+  { label: 'Ativo', value: 'ativo' },
+  { label: 'Inativo', value: 'inativo' },
+]
+
+const hasTxFilters = computed(() =>
+  txFilterConta.value !== null || txFilterMes.value !== '' || txFilterStatus.value !== 'todos'
+)
+const hasRecFilters = computed(() =>
+  recFilterConta.value !== null || recFilterStatus.value !== 'todos'
+)
+const hasInvFilters = computed(() =>
+  invFilterConta.value !== null
 )
 
-function clearFilters() {
-  filterConta.value = null
-  filterMes.value = ''
-  filterStatus.value = 'todos'
+function clearTxFilters() {
+  txFilterConta.value = null
+  txFilterMes.value = ''
+  txFilterStatus.value = 'todos'
+}
+function clearRecFilters() {
+  recFilterConta.value = null
+  recFilterStatus.value = 'todos'
+}
+function clearInvFilters() {
+  invFilterConta.value = null
 }
 </script>
 
 <template>
   <Card>
     <CardContent class="pt-6 space-y-4">
-      <!-- Filtros -->
-      <Collapsible>
-        <CollapsibleTrigger as-child>
-          <Button variant="ghost" size="sm" class="flex items-center gap-2 w-full justify-between">
-            <span class="flex items-center gap-2">
-              <Filter class="h-4 w-4" />
-              Filtros
-            </span>
-            <ChevronsUpDown class="h-4 w-4" />
-          </Button>
-        </CollapsibleTrigger>
-        <CollapsibleContent class="pt-3">
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Select v-model="filterConta">
-              <SelectTrigger>
-                <SelectValue placeholder="Conta" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem :value="null">Todas</SelectItem>
-                <SelectItem v-for="acc in accountsStore.accounts" :key="acc.id" :value="acc.id">
-                  {{ acc.label }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Input v-model="filterMes" type="month" placeholder="Mês" />
-
-            <Select v-model="filterStatus">
-              <SelectTrigger>
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
-                  {{ opt.label }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Button
-              v-if="hasActiveFilters"
-              variant="ghost"
-              size="sm"
-              class="gap-2"
-              @click="clearFilters"
-            >
-              <X class="h-4 w-4" />
-              Limpar
-            </Button>
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
-
-      <Separator />
-
       <!-- Tabs por tipo -->
       <Tabs default-value="transacoes">
         <TabsList class="w-full justify-start">
@@ -174,6 +156,56 @@ function clearFilters() {
 
         <!-- ═══ TAB TRANSAÇÕES ═══ -->
         <TabsContent value="transacoes">
+          <!-- Filtros Transações -->
+          <Collapsible v-model:open="txFiltersOpen" class="mb-4">
+            <CollapsibleTrigger as-child>
+              <Button variant="ghost" size="sm" class="flex items-center gap-2 w-full justify-between">
+                <span class="flex items-center gap-2">
+                  <Filter class="h-4 w-4" />
+                  Filtros
+                </span>
+                <ChevronsUpDown class="h-4 w-4" />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent class="pt-3">
+              <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <Select v-model="txFilterConta">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Conta" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem :value="null">Todas</SelectItem>
+                    <SelectItem v-for="acc in accountsStore.accounts" :key="acc.id" :value="acc.id">
+                      {{ acc.label }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Input v-model="txFilterMes" type="month" placeholder="Mês" />
+
+                <Select v-model="txFilterStatus">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="opt in txStatusOptions" :key="opt.value" :value="opt.value">
+                      {{ opt.label }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                v-if="hasTxFilters"
+                variant="ghost"
+                size="sm"
+                class="gap-2 mt-2 ml-auto"
+                @click="clearTxFilters"
+              >
+                <X class="h-4 w-4" />
+                Limpar filtros
+              </Button>
+            </CollapsibleContent>
+          </Collapsible>
           <Table v-if="filteredTransactions.length">
             <TableHeader>
               <TableRow>
@@ -231,6 +263,55 @@ function clearFilters() {
 
         <!-- ═══ TAB RECORRENTES ═══ -->
         <TabsContent value="recorrentes">
+          <!-- Filtros Recorrentes -->
+          <Collapsible v-model:open="recFiltersOpen" class="mb-4">
+            <CollapsibleTrigger as-child>
+              <Button variant="ghost" size="sm" class="flex items-center gap-2 w-full justify-between">
+                <span class="flex items-center gap-2">
+                  <Filter class="h-4 w-4" />
+                  Filtros
+                </span>
+                <ChevronsUpDown class="h-4 w-4" />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent class="pt-3">
+              <div class="grid grid-cols-2 gap-3">
+                <Select v-model="recFilterConta">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Conta" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem :value="null">Todas</SelectItem>
+                    <SelectItem v-for="acc in accountsStore.accounts" :key="acc.id" :value="acc.id">
+                      {{ acc.label }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select v-model="recFilterStatus">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="opt in recStatusOptions" :key="opt.value" :value="opt.value">
+                      {{ opt.label }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                v-if="hasRecFilters"
+                variant="ghost"
+                size="sm"
+                class="gap-2 mt-2 ml-auto"
+                @click="clearRecFilters"
+              >
+                <X class="h-4 w-4" />
+                Limpar filtros
+              </Button>
+            </CollapsibleContent>
+          </Collapsible>
+
           <Table v-if="filteredRecurrents.length">
             <TableHeader>
               <TableRow>
@@ -267,6 +348,44 @@ function clearFilters() {
 
         <!-- ═══ TAB INVESTIMENTOS ═══ -->
         <TabsContent value="investimentos">
+          <!-- Filtros Investimentos -->
+          <Collapsible v-model:open="invFiltersOpen" class="mb-4">
+            <CollapsibleTrigger as-child>
+              <Button variant="ghost" size="sm" class="flex items-center gap-2 w-full justify-between">
+                <span class="flex items-center gap-2">
+                  <Filter class="h-4 w-4" />
+                  Filtros
+                </span>
+                <ChevronsUpDown class="h-4 w-4" />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent class="pt-3">
+              <div class="grid grid-cols-1 gap-3">
+                <Select v-model="invFilterConta">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Conta" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem :value="null">Todas</SelectItem>
+                    <SelectItem v-for="acc in accountsStore.accounts" :key="acc.id" :value="acc.id">
+                      {{ acc.label }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                v-if="hasInvFilters"
+                variant="ghost"
+                size="sm"
+                class="gap-2 mt-2 ml-auto"
+                @click="clearInvFilters"
+              >
+                <X class="h-4 w-4" />
+                Limpar filtros
+              </Button>
+            </CollapsibleContent>
+          </Collapsible>
+
           <Table v-if="filteredInvestments.length">
             <TableHeader>
               <TableRow>

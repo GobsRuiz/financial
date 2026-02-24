@@ -4,7 +4,9 @@
   "scripts": {
     "dev": "concurrently \"npm run mock\" \"npm run client\"",
     "mock": "json-server --watch db.json --port 3001 --delay 100",
-    "client": "cd client && npm run dev"
+    "client": "cd client && npm run dev",
+    "electron:dev": "concurrently \"npm run mock\" \"npm run client\" \"npx wait-on http://localhost:3000 && cd electron && npm run dev\"",
+    "electron:build": "cd client && npx nuxt generate && cd ../electron && npm run build"
   },
   "dependencies": {
     "concurrently": "^9.0.0",

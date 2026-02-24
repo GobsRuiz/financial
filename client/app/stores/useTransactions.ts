@@ -1,9 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { v4 as uuid } from 'uuid'
-import type { Transaction } from '~/schemas/zod-schemas'
+import type { Transaction, Recurrent } from '~/schemas/zod-schemas'
 import { apiGet, apiPost, apiPatch } from '~/utils/api'
-import { addMonths } from '~/utils/dates'
+import { addMonths, monthKey, nowISO } from '~/utils/dates'
 import { useAccountsStore } from './useAccounts'
 
 export const useTransactionsStore = defineStore('transactions', () => {
@@ -11,6 +11,42 @@ export const useTransactionsStore = defineStore('transactions', () => {
 
   async function loadTransactions(filters?: Record<string, string>) {
     transactions.value = await apiGet<Transaction[]>('/transactions', filters)
+  }
+
+  /** Transações não pagas de um mês específico (YYYY-MM) */
+  function unpaidForMonth(month: string): Transaction[] {
+    return transactions.value.filter(t => !t.paid && monthKey(t.date) === month)
+  }
+
+  /** Verifica se já existe transação criada a partir de um recorrente num mês */
+  function hasRecurrentTransaction(recurrentId: string, month: string): boolean {
+    return transactions.value.some(
+      t => t.recurrentId === recurrentId && monthKey(t.date) === month,
+    )
+  }
+
+  /** Paga um recorrente: cria transaction do mês + marca pago + ajusta saldo */
+  async function payRecurrent(rec: Recurrent, month: string) {
+    const date = rec.day_of_month
+      ? `${month}-${String(rec.day_of_month).padStart(2, '0')}`
+      : `${month}-01`
+
+    const tx = await addTransaction({
+      accountId: rec.accountId,
+      date,
+      type: rec.kind === 'expense' ? 'expense' : 'income',
+      category: rec.name,
+      amount_cents: rec.amount_cents,
+      description: rec.description || undefined,
+      paid: true,
+      installment: null,
+      recurrentId: rec.id,
+    })
+
+    const accountsStore = useAccountsStore()
+    await accountsStore.adjustBalance(rec.accountId, rec.amount_cents, rec.name)
+
+    return tx
   }
 
   async function addTransaction(tx: Omit<Transaction, 'id'>) {
@@ -92,5 +128,5 @@ export const useTransactionsStore = defineStore('transactions', () => {
     await accountsStore.adjustBalance(tx.accountId, tx.amount_cents, note)
   }
 
-  return { transactions, loadTransactions, addTransaction, generateInstallments, markPaid }
+  return { transactions, loadTransactions, addTransaction, generateInstallments, markPaid, unpaidForMonth, hasRecurrentTransaction, payRecurrent }
 })
