@@ -6,7 +6,9 @@
       "Read(//c/Users/ursie/.claude/projects/c--MyFiles-Programming-Me-financeiro/**)",
       "Bash(pkill:*)",
       "Bash(npx nuxt generate)",
-      "WebFetch(domain:vue-sonner.vercel.app)"
+      "WebFetch(domain:vue-sonner.vercel.app)",
+      "Read(//c/MyFiles/**)",
+      "WebFetch(domain:www.radix-vue.com)"
     ]
   }
 }

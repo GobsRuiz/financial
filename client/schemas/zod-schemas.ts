@@ -55,13 +55,87 @@ export const recurrentSchema = z.object({
 export type Recurrent = z.infer<typeof recurrentSchema> & { id: string }
 
 // ── Investment ──
+export const investmentTypeSchema = z.enum([
+  'fii',
+  'cripto',
+  'caixinha',
+  'cdb',
+  'cdi',
+  'tesouro',
+  'lci',
+  'lca',
+  'outro',
+])
+
+export const investmentIndexerSchema = z.enum(['CDI', 'IPCA', 'PRE', 'SELIC', 'OUTRO'])
+export const investmentLiquiditySchema = z.enum(['D0', 'D1', 'NO_VENCIMENTO', 'OUTRA'])
+
+const investmentDetailsSchema = z.object({
+  quantity: z.number().positive('Quantidade deve ser maior que zero').optional(),
+  avg_unit_price_cents: z.number().int().nonnegative().optional(),
+  current_unit_price_cents: z.number().int().nonnegative().optional(),
+  issuer: z.string().trim().min(1).optional(),
+  title: z.string().trim().min(1).optional(),
+  indexer: investmentIndexerSchema.optional(),
+  rate_percent: z.number().nonnegative().optional(),
+  maturity_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida (YYYY-MM-DD)').optional(),
+  liquidity: investmentLiquiditySchema.optional(),
+})
+
 export const investmentSchema = z.object({
   id: z.string().uuid().optional(),
   accountId: z.number().int({ message: 'Conta é obrigatória' }),
+  investment_type: investmentTypeSchema.default('outro'),
   asset_tag: z.string().min(1, 'Ativo é obrigatório'),
   applied_cents: z.number().int(),
   current_cents: z.number().int().optional(),
   description: z.string().optional(),
+  details: investmentDetailsSchema.default({}),
+}).superRefine((val, ctx) => {
+  const quotaTypes = new Set(['fii', 'cripto'])
+  const fixedIncomeTypes = new Set(['caixinha', 'cdb', 'cdi', 'lci', 'lca'])
+
+  if (quotaTypes.has(val.investment_type) && !val.details.quantity) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['details', 'quantity'],
+      message: 'Quantidade é obrigatória para este tipo',
+    })
+  }
+
+  if (fixedIncomeTypes.has(val.investment_type)) {
+    if (!val.details.indexer) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['details', 'indexer'],
+        message: 'Indexador é obrigatório para este tipo',
+      })
+    }
+    if (val.details.rate_percent == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['details', 'rate_percent'],
+        message: 'Taxa é obrigatória para este tipo',
+      })
+    }
+  }
+
+  if (val.investment_type === 'tesouro') {
+    if (!val.details.title?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['details', 'title'],
+        message: 'Título é obrigatório para Tesouro',
+      })
+    }
+    if (!val.details.maturity_date) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['details', 'maturity_date'],
+        message: 'Vencimento é obrigatório para Tesouro',
+      })
+    }
+  }
 })
 
 export type Investment = z.infer<typeof investmentSchema> & { id: string }

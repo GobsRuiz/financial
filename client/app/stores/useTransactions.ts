@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { v4 as uuid } from 'uuid'
 import type { Transaction, Recurrent } from '~/schemas/zod-schemas'
-import { apiGet, apiPost, apiPatch } from '~/utils/api'
+import { apiGet, apiPost, apiPatch, apiDelete } from '~/utils/api'
 import { addMonths, monthKey, nowISO } from '~/utils/dates'
 import { useAccountsStore } from './useAccounts'
 
@@ -128,5 +128,17 @@ export const useTransactionsStore = defineStore('transactions', () => {
     await accountsStore.adjustBalance(tx.accountId, tx.amount_cents, note)
   }
 
-  return { transactions, loadTransactions, addTransaction, generateInstallments, markPaid, unpaidForMonth, hasRecurrentTransaction, payRecurrent }
+  async function updateTransaction(id: string, patch: Partial<Transaction>) {
+    const updated = await apiPatch<Transaction>(`/transactions/${id}`, patch)
+    const idx = transactions.value.findIndex(t => t.id === id)
+    if (idx !== -1) transactions.value[idx] = updated
+    return updated
+  }
+
+  async function deleteTransaction(id: string) {
+    await apiDelete(`/transactions/${id}`)
+    transactions.value = transactions.value.filter(t => t.id !== id)
+  }
+
+  return { transactions, loadTransactions, addTransaction, updateTransaction, deleteTransaction, generateInstallments, markPaid, unpaidForMonth, hasRecurrentTransaction, payRecurrent }
 })

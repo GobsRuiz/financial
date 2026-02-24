@@ -47,6 +47,32 @@ function getAccountLabel(accountId: number) {
   return accountsStore.accounts.find(a => a.id === accountId)?.label ?? '—'
 }
 
+function getInvestmentTypeLabel(type?: string) {
+  const map: Record<string, string> = {
+    fii: 'FII',
+    cripto: 'Cripto',
+    caixinha: 'Caixinha',
+    cdb: 'CDB',
+    cdi: 'CDI',
+    tesouro: 'Tesouro',
+    lci: 'LCI',
+    lca: 'LCA',
+    outro: 'Outro',
+  }
+  return map[type ?? 'outro'] ?? 'Outro'
+}
+
+function getInvestmentSummary(inv: (typeof investmentsStore.investments)[number]) {
+  const quantity = inv.details?.quantity
+  if (quantity != null) return `${quantity} unidades`
+  if (inv.details?.indexer || inv.details?.rate_percent != null) {
+    const indexer = inv.details.indexer ?? '—'
+    const rate = inv.details.rate_percent != null ? `${inv.details.rate_percent}%` : '—'
+    return `${indexer} • ${rate}`
+  }
+  return inv.description ?? '—'
+}
+
 const q = computed(() => searchQuery.value.toLowerCase().trim())
 
 // Transações filtradas
@@ -84,6 +110,8 @@ const filteredInvestments = computed(() => {
     invs = invs.filter(i =>
       i.asset_tag.toLowerCase().includes(q.value)
       || (i.description ?? '').toLowerCase().includes(q.value)
+      || (i.investment_type ?? 'outro').toLowerCase().includes(q.value)
+      || (i.details?.indexer ?? '').toLowerCase().includes(q.value)
     )
   }
   return invs
@@ -304,8 +332,9 @@ const filteredHistory = computed(() => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Ativo</TableHead>
+                  <TableHead>Tipo</TableHead>
                   <TableHead>Conta</TableHead>
-                  <TableHead>Descrição</TableHead>
+                  <TableHead>Resumo</TableHead>
                   <TableHead class="text-right">Aplicado</TableHead>
                   <TableHead class="text-right">Atual</TableHead>
                 </TableRow>
@@ -313,8 +342,9 @@ const filteredHistory = computed(() => {
               <TableBody>
                 <TableRow v-for="inv in filteredInvestments" :key="inv.id">
                   <TableCell><Badge>{{ inv.asset_tag }}</Badge></TableCell>
+                  <TableCell><Badge variant="secondary">{{ getInvestmentTypeLabel(inv.investment_type) }}</Badge></TableCell>
                   <TableCell>{{ getAccountLabel(inv.accountId) }}</TableCell>
-                  <TableCell>{{ inv.description ?? '—' }}</TableCell>
+                  <TableCell>{{ getInvestmentSummary(inv) }}</TableCell>
                   <TableCell class="text-right">{{ formatCentsToBRL(inv.applied_cents) }}</TableCell>
                   <TableCell class="text-right">{{ inv.current_cents ? formatCentsToBRL(inv.current_cents) : '—' }}</TableCell>
                 </TableRow>

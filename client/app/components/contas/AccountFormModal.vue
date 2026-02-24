@@ -25,6 +25,9 @@ const form = reactive({
   card_due_day: '',
 })
 
+const lastAutoLabel = ref('')
+const hasManualLabelEdit = ref(false)
+
 watch(() => props.account, (acc) => {
   if (acc) {
     form.bank = acc.bank
@@ -32,10 +35,39 @@ watch(() => props.account, (acc) => {
     form.balance = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(acc.balance_cents / 100)
     form.card_closing_day = acc.card_closing_day?.toString() ?? ''
     form.card_due_day = acc.card_due_day?.toString() ?? ''
+    lastAutoLabel.value = ''
+    hasManualLabelEdit.value = true
   } else {
     resetForm()
   }
 }, { immediate: true })
+
+watch(() => form.bank, (bank) => {
+  if (isEdit.value) return
+
+  const normalizedBank = bank.trim()
+  if (!normalizedBank) {
+    if (!hasManualLabelEdit.value || form.label === lastAutoLabel.value) {
+      form.label = ''
+      lastAutoLabel.value = ''
+      hasManualLabelEdit.value = false
+    }
+    return
+  }
+
+  if (hasManualLabelEdit.value && form.label !== lastAutoLabel.value) return
+
+  const suggestedLabel = `${normalizedBank} Principal`
+  form.label = suggestedLabel
+  lastAutoLabel.value = suggestedLabel
+})
+
+watch(() => form.label, (label) => {
+  if (isEdit.value) return
+  if (label !== lastAutoLabel.value) {
+    hasManualLabelEdit.value = true
+  }
+})
 
 function resetForm() {
   form.bank = ''
@@ -44,12 +76,13 @@ function resetForm() {
   form.card_closing_day = ''
   form.card_due_day = ''
   error.value = ''
+  lastAutoLabel.value = ''
+  hasManualLabelEdit.value = false
 }
 
 async function handleSubmit() {
   if (!form.bank.trim()) { error.value = 'Informe o banco'; return }
   if (!form.label.trim()) { error.value = 'Informe o nome da conta'; return }
-  if (!form.balance.trim()) { error.value = 'Informe o saldo'; return }
 
   loading.value = true
   error.value = ''
@@ -94,7 +127,7 @@ async function handleSubmit() {
       </div>
 
       <div class="space-y-2">
-        <Label>Saldo *</Label>
+        <Label>Saldo</Label>
         <MoneyInput v-model="form.balance" />
       </div>
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { X } from 'lucide-vue-next'
+import { X, Plus } from 'lucide-vue-next'
 import { useTagsStore } from '~/stores/useTags'
 
 const props = defineProps<{
@@ -12,6 +12,7 @@ const emit = defineEmits<{
 
 const tagsStore = useTagsStore()
 const inputValue = ref('')
+const open = ref(false)
 
 const availableTags = computed(() =>
   tagsStore.tags
@@ -29,6 +30,11 @@ const showNew = computed(() => {
   if (!inputValue.value.trim()) return false
   const search = inputValue.value.toLowerCase().trim()
   return !tagsStore.tags.some(t => t.name === search)
+    && !props.modelValue.includes(search)
+})
+
+const showDropdown = computed(() => {
+  return open.value && (filteredTags.value.length > 0 || showNew.value || inputValue.value.trim() === '')
 })
 
 async function addTag(name: string) {
@@ -39,6 +45,33 @@ async function addTag(name: string) {
 
 function removeTag(name: string) {
   emit('update:modelValue', props.modelValue.filter(t => t !== name))
+}
+
+function onFocus() {
+  open.value = true
+}
+
+function onBlur() {
+  // Delay para permitir click no dropdown antes de fechar
+  setTimeout(() => {
+    open.value = false
+  }, 150)
+}
+
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    const val = inputValue.value.trim()
+    if (!val) return
+
+    // Se existe match exato na lista filtrada, adiciona
+    const exactMatch = filteredTags.value.find(t => t === val.toLowerCase())
+    if (exactMatch) {
+      addTag(exactMatch)
+    } else if (showNew.value) {
+      addTag(val)
+    }
+  }
 }
 </script>
 
@@ -59,39 +92,55 @@ function removeTag(name: string) {
       </Badge>
     </div>
 
-    <!-- Input + dropdown -->
-    <Popover>
-      <PopoverTrigger as-child>
-        <Input
-          v-model="inputValue"
-          placeholder="Buscar ou criar tag..."
-          class="h-8 text-sm"
-        />
-      </PopoverTrigger>
-      <PopoverContent class="w-[200px] p-0" align="start">
-        <div class="max-h-[200px] overflow-y-auto">
+    <!-- Input + dropdown manual -->
+    <div class="relative">
+      <Input
+        v-model="inputValue"
+        placeholder="Digite para buscar ou criar tag..."
+        class="h-8 text-sm"
+        @focus="onFocus"
+        @blur="onBlur"
+        @keydown="onKeydown"
+      />
+
+      <div
+        v-if="showDropdown"
+        class="absolute top-full left-0 z-50 mt-1 w-full rounded-md border bg-popover text-popover-foreground shadow-md"
+      >
+        <div class="max-h-[200px] overflow-y-auto p-1">
+          <!-- Tags existentes filtradas -->
           <button
             v-for="tag in filteredTags"
             :key="tag"
             type="button"
-            class="flex w-full items-center px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
+            class="flex w-full items-center rounded-sm px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
+            @mousedown.prevent
             @click="addTag(tag)"
           >
             {{ tag }}
           </button>
+
+          <!-- Criar nova tag -->
           <button
             v-if="showNew"
             type="button"
-            class="flex w-full items-center px-3 py-1.5 text-sm text-primary hover:bg-accent"
+            class="flex w-full items-center gap-2 rounded-sm px-3 py-1.5 text-sm text-primary hover:bg-accent hover:text-accent-foreground"
+            @mousedown.prevent
             @click="addTag(inputValue.trim())"
           >
-            + Criar "{{ inputValue.trim() }}"
+            <Plus class="h-3.5 w-3.5" />
+            Criar "{{ inputValue.trim() }}"
           </button>
-          <p v-if="!filteredTags.length && !showNew" class="px-3 py-2 text-sm text-muted-foreground">
-            Nenhuma tag encontrada
+
+          <!-- Mensagem quando não há tags e input vazio -->
+          <p
+            v-if="!filteredTags.length && !showNew"
+            class="px-3 py-2 text-sm text-muted-foreground"
+          >
+            Digite para criar uma tag
           </p>
         </div>
-      </PopoverContent>
-    </Popover>
+      </div>
+    </div>
   </div>
 </template>

@@ -1,16 +1,25 @@
 <script setup lang="ts">
-import { ChevronDown, ChevronRight, Filter, ChevronsUpDown, X } from 'lucide-vue-next'
+import { ChevronDown, ChevronRight, Filter, ChevronsUpDown, X, MoreHorizontal, Pencil, Trash2, Eye } from 'lucide-vue-next'
+import type { Transaction, Recurrent, Investment } from '~/schemas/zod-schemas'
 import { useTransactionsStore } from '~/stores/useTransactions'
 import { useRecurrentsStore } from '~/stores/useRecurrents'
 import { useInvestmentsStore } from '~/stores/useInvestments'
 import { useAccountsStore } from '~/stores/useAccounts'
 import { formatCentsToBRL } from '~/utils/money'
 import { monthKey } from '~/utils/dates'
+import { useAppToast } from '~/composables/useAppToast'
+
+const emit = defineEmits<{
+  'edit-transaction': [tx: Transaction]
+  'edit-recurrent': [rec: Recurrent]
+  'edit-investment': [inv: Investment]
+}>()
 
 const transactionsStore = useTransactionsStore()
 const recurrentsStore = useRecurrentsStore()
 const investmentsStore = useInvestmentsStore()
 const accountsStore = useAccountsStore()
+const appToast = useAppToast()
 
 // Estado dos filtros abertos por tab
 const txFiltersOpen = ref(false)
@@ -32,6 +41,19 @@ const invFilterConta = ref<number | null>(null)
 // Expand state para parcelas
 const expandedParents = ref<Set<string>>(new Set())
 
+// ── Visualização Transação ──
+const viewingTransaction = ref<Transaction | null>(null)
+const viewDialogOpen = ref(false)
+
+function openViewTransaction(tx: Transaction) {
+  viewingTransaction.value = tx
+  viewDialogOpen.value = true
+}
+
+// ── Confirm Delete ──
+const confirmDeleteOpen = ref(false)
+const deleteTarget = ref<{ type: 'transaction' | 'recurrent' | 'investment'; id: string; label: string } | null>(null)
+
 function toggleExpand(parentId: string) {
   if (expandedParents.value.has(parentId)) {
     expandedParents.value.delete(parentId)
@@ -42,6 +64,59 @@ function toggleExpand(parentId: string) {
 
 function getAccountLabel(accountId: number) {
   return accountsStore.accounts.find(a => a.id === accountId)?.label ?? '—'
+}
+
+function getInvestmentTypeLabel(type?: Investment['investment_type']) {
+  const map: Record<string, string> = {
+    fii: 'FII',
+    cripto: 'Cripto',
+    caixinha: 'Caixinha',
+    cdb: 'CDB',
+    cdi: 'CDI',
+    tesouro: 'Tesouro',
+    lci: 'LCI',
+    lca: 'LCA',
+    outro: 'Outro',
+  }
+  return map[type ?? 'outro'] ?? 'Outro'
+}
+
+function getInvestmentDetailsSummary(inv: Investment) {
+  const quantity = inv.details?.quantity
+  if (quantity != null) return `${quantity} unidades`
+  if (inv.details?.indexer || inv.details?.rate_percent != null) {
+    const indexer = inv.details.indexer ?? '—'
+    const rate = inv.details.rate_percent != null ? `${inv.details.rate_percent}%` : '—'
+    return `${indexer} • ${rate}`
+  }
+  return inv.description ?? '—'
+}
+
+// ── Ações ──
+function requestDelete(type: 'transaction' | 'recurrent' | 'investment', id: string, label: string) {
+  deleteTarget.value = { type, id, label }
+  confirmDeleteOpen.value = true
+}
+
+async function confirmDelete() {
+  if (!deleteTarget.value) return
+
+  try {
+    const { type, id } = deleteTarget.value
+    if (type === 'transaction') {
+      await transactionsStore.deleteTransaction(id)
+    } else if (type === 'recurrent') {
+      await recurrentsStore.deleteRecurrent(id)
+    } else {
+      await investmentsStore.deleteInvestment(id)
+    }
+    appToast.success({ title: 'Excluído com sucesso' })
+  } catch (e: any) {
+    appToast.error({ title: 'Erro ao excluir', description: e.message })
+  } finally {
+    confirmDeleteOpen.value = false
+    deleteTarget.value = null
+  }
 }
 
 // Transações filtradas (agrupar parcelas pelo parentId)
@@ -129,6 +204,7 @@ function clearInvFilters() {
 </script>
 
 <template>
+  <div>
   <Card>
     <CardContent class="pt-6 space-y-4">
       <!-- Tabs por tipo -->
@@ -210,19 +286,21 @@ function clearInvFilters() {
             <TableHeader>
               <TableRow>
                 <TableHead class="w-8"></TableHead>
-                <TableHead>Data</TableHead>
-                <TableHead>Descrição</TableHead>
+                <TableHead>Valor</TableHead>
                 <TableHead>Categoria</TableHead>
-                <TableHead>Conta</TableHead>
+                <TableHead>Descrição</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead class="text-right">Valor</TableHead>
+                <TableHead>Data</TableHead>
+                <TableHead>Tags</TableHead>
+                <TableHead>Conta</TableHead>
+                <TableHead class="w-10"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               <template v-for="tx in filteredTransactions" :key="tx.id">
                 <TableRow
                   class="cursor-pointer"
-                  @click="tx.installment ? toggleExpand(tx.installment.parentId) : undefined"
+                  @click="tx.installment ? toggleExpand(tx.installment.parentId) : openViewTransaction(tx)"
                 >
                   <TableCell>
                     <button v-if="tx.installment" type="button" class="text-muted-foreground">
@@ -230,26 +308,60 @@ function clearInvFilters() {
                       <ChevronRight v-else class="h-4 w-4" />
                     </button>
                   </TableCell>
-                  <TableCell>{{ tx.date }}</TableCell>
+                  <TableCell :class="tx.amount_cents < 0 ? 'text-red-500' : 'text-green-500'">
+                    {{ formatCentsToBRL(Math.abs(tx.amount_cents)) }}
+                  </TableCell>
+                  <TableCell>{{ tx.category }}</TableCell>
                   <TableCell>
                     <span v-if="tx.installment">
                       {{ tx.installment.product }} {{ tx.installment.total }}x
                     </span>
-                    <span v-else>{{ tx.description || tx.category }}</span>
+                    <span v-else>{{ tx.description || '—' }}</span>
                   </TableCell>
-                  <TableCell>{{ tx.category }}</TableCell>
-                  <TableCell>{{ getAccountLabel(tx.accountId) }}</TableCell>
                   <TableCell>
                     <Badge v-if="tx.paid" variant="outline" class="text-green-500 border-green-500/30">Pago</Badge>
                     <Badge v-else variant="outline" class="text-yellow-500 border-yellow-500/30">Pendente</Badge>
                   </TableCell>
-                  <TableCell class="text-right" :class="tx.amount_cents < 0 ? 'text-red-500' : 'text-green-500'">
-                    {{ formatCentsToBRL(Math.abs(tx.amount_cents)) }}
+                  <TableCell>{{ tx.date }}</TableCell>
+                  <TableCell>
+                    <div v-if="tx.tags?.length" class="flex flex-wrap gap-1">
+                      <Badge v-for="tag in tx.tags" :key="tag" variant="secondary" class="text-xs">
+                        {{ tag }}
+                      </Badge>
+                    </div>
+                    <span v-else class="text-muted-foreground">—</span>
+                  </TableCell>
+                  <TableCell>{{ getAccountLabel(tx.accountId) }}</TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger as-child>
+                        <Button variant="ghost" size="icon" class="h-8 w-8" @click.stop>
+                          <MoreHorizontal class="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem @click.stop="openViewTransaction(tx)">
+                          <Eye class="h-4 w-4 mr-2" />
+                          Visualizar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem @click.stop="emit('edit-transaction', tx)">
+                          <Pencil class="h-4 w-4 mr-2" />
+                          Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          variant="destructive"
+                          @click.stop="requestDelete('transaction', tx.id, tx.description || tx.category)"
+                        >
+                          <Trash2 class="h-4 w-4 mr-2" />
+                          Excluir
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
                 <!-- Parcelas expandidas -->
                 <TableRow v-if="tx.installment && expandedParents.has(tx.installment.parentId)" :key="`${tx.id}-expand`">
-                  <TableCell colspan="7" class="p-0 pt-0 pb-2">
+                  <TableCell colspan="9" class="p-0 pt-0 pb-2">
                     <ParcelasExpansion :parent-id="tx.installment.parentId" />
                   </TableCell>
                 </TableRow>
@@ -321,6 +433,7 @@ function clearInvFilters() {
                 <TableHead>Dia</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead class="text-right">Valor</TableHead>
+                <TableHead class="w-10"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -337,6 +450,28 @@ function clearInvFilters() {
                 </TableCell>
                 <TableCell class="text-right" :class="rec.amount_cents < 0 ? 'text-red-500' : 'text-green-500'">
                   {{ formatCentsToBRL(Math.abs(rec.amount_cents)) }}
+                </TableCell>
+                <TableCell>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger as-child>
+                      <Button variant="ghost" size="icon" class="h-8 w-8">
+                        <MoreHorizontal class="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem @click="emit('edit-recurrent', rec)">
+                        <Pencil class="h-4 w-4 mr-2" />
+                        Editar
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        variant="destructive"
+                        @click="requestDelete('recurrent', rec.id, rec.name)"
+                      >
+                        <Trash2 class="h-4 w-4 mr-2" />
+                        Excluir
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </TableCell>
               </TableRow>
             </TableBody>
@@ -390,10 +525,12 @@ function clearInvFilters() {
             <TableHeader>
               <TableRow>
                 <TableHead>Ativo</TableHead>
+                <TableHead>Tipo</TableHead>
                 <TableHead>Conta</TableHead>
-                <TableHead>Descrição</TableHead>
+                <TableHead>Resumo</TableHead>
                 <TableHead class="text-right">Aplicado</TableHead>
                 <TableHead class="text-right">Atual</TableHead>
+                <TableHead class="w-10"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -401,11 +538,36 @@ function clearInvFilters() {
                 <TableCell>
                   <Badge>{{ inv.asset_tag }}</Badge>
                 </TableCell>
+                <TableCell>
+                  <Badge variant="secondary">{{ getInvestmentTypeLabel(inv.investment_type) }}</Badge>
+                </TableCell>
                 <TableCell>{{ getAccountLabel(inv.accountId) }}</TableCell>
-                <TableCell>{{ inv.description ?? '—' }}</TableCell>
+                <TableCell>{{ getInvestmentDetailsSummary(inv) }}</TableCell>
                 <TableCell class="text-right">{{ formatCentsToBRL(inv.applied_cents) }}</TableCell>
                 <TableCell class="text-right">
                   {{ inv.current_cents ? formatCentsToBRL(inv.current_cents) : '—' }}
+                </TableCell>
+                <TableCell>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger as-child>
+                      <Button variant="ghost" size="icon" class="h-8 w-8">
+                        <MoreHorizontal class="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem @click="emit('edit-investment', inv)">
+                        <Pencil class="h-4 w-4 mr-2" />
+                        Editar
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        variant="destructive"
+                        @click="requestDelete('investment', inv.id, inv.asset_tag)"
+                      >
+                        <Trash2 class="h-4 w-4 mr-2" />
+                        Excluir
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </TableCell>
               </TableRow>
             </TableBody>
@@ -417,4 +579,74 @@ function clearInvFilters() {
       </Tabs>
     </CardContent>
   </Card>
+
+  <!-- Modal Visualização Transação -->
+  <Dialog v-model:open="viewDialogOpen">
+    <DialogContent class="max-w-md">
+      <DialogHeader>
+        <DialogTitle>Detalhes da Transação</DialogTitle>
+        <DialogDescription>Informações completas da movimentação</DialogDescription>
+      </DialogHeader>
+      <div v-if="viewingTransaction" class="space-y-3 text-sm">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <p class="text-muted-foreground">Valor</p>
+            <p class="font-medium" :class="viewingTransaction.amount_cents < 0 ? 'text-red-500' : 'text-green-500'">
+              {{ formatCentsToBRL(Math.abs(viewingTransaction.amount_cents)) }}
+            </p>
+          </div>
+          <div>
+            <p class="text-muted-foreground">Tipo</p>
+            <p class="font-medium">{{ viewingTransaction.type === 'expense' ? 'Despesa' : viewingTransaction.type === 'income' ? 'Receita' : 'Transferência' }}</p>
+          </div>
+          <div>
+            <p class="text-muted-foreground">Categoria</p>
+            <p class="font-medium">{{ viewingTransaction.category }}</p>
+          </div>
+          <div>
+            <p class="text-muted-foreground">Data</p>
+            <p class="font-medium">{{ viewingTransaction.date }}</p>
+          </div>
+          <div>
+            <p class="text-muted-foreground">Conta</p>
+            <p class="font-medium">{{ getAccountLabel(viewingTransaction.accountId) }}</p>
+          </div>
+          <div>
+            <p class="text-muted-foreground">Status</p>
+            <Badge v-if="viewingTransaction.paid" variant="outline" class="text-green-500 border-green-500/30">Pago</Badge>
+            <Badge v-else variant="outline" class="text-yellow-500 border-yellow-500/30">Pendente</Badge>
+          </div>
+        </div>
+        <div v-if="viewingTransaction.description">
+          <p class="text-muted-foreground">Descrição</p>
+          <p class="font-medium">{{ viewingTransaction.description }}</p>
+        </div>
+        <div v-if="viewingTransaction.tags?.length">
+          <p class="text-muted-foreground mb-1">Tags</p>
+          <div class="flex flex-wrap gap-1">
+            <Badge v-for="tag in viewingTransaction.tags" :key="tag" variant="secondary">
+              {{ tag }}
+            </Badge>
+          </div>
+        </div>
+        <div v-if="viewingTransaction.installment">
+          <p class="text-muted-foreground">Parcela</p>
+          <p class="font-medium">{{ viewingTransaction.installment.index }}/{{ viewingTransaction.installment.total }} — {{ viewingTransaction.installment.product }}</p>
+        </div>
+      </div>
+    </DialogContent>
+  </Dialog>
+
+  <!-- Confirm Delete Dialog -->
+  <ConfirmDialog
+    :open="confirmDeleteOpen"
+    title="Excluir item?"
+    :description="`Deseja excluir '${deleteTarget?.label}'? Esta ação não pode ser desfeita.`"
+    confirm-label="Sim, excluir"
+    cancel-label="Cancelar"
+    :destructive="true"
+    @confirm="confirmDelete"
+    @cancel="confirmDeleteOpen = false"
+  />
+  </div>
 </template>

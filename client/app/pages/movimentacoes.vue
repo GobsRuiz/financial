@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ArrowLeftRight, Plus } from 'lucide-vue-next'
+import type { Transaction, Recurrent, Investment } from '~/schemas/zod-schemas'
 import { useAccountsStore } from '~/stores/useAccounts'
 import { useTagsStore } from '~/stores/useTags'
 import { useTransactionsStore } from '~/stores/useTransactions'
@@ -15,6 +16,18 @@ const investmentsStore = useInvestmentsStore()
 const dialogOpen = ref(false)
 const loading = ref(true)
 
+// Estado de edição
+const editingTransaction = ref<Transaction | null>(null)
+const editingRecurrent = ref<Recurrent | null>(null)
+const editingInvestment = ref<Investment | null>(null)
+
+const dialogTitle = computed(() => {
+  if (editingTransaction.value) return 'Editar Transação'
+  if (editingRecurrent.value) return 'Editar Recorrente'
+  if (editingInvestment.value) return 'Editar Investimento'
+  return 'Nova Movimentação'
+})
+
 onMounted(async () => {
   try {
     await Promise.all([
@@ -28,6 +41,34 @@ onMounted(async () => {
     loading.value = false
   }
 })
+
+function openNew() {
+  editingTransaction.value = null
+  editingRecurrent.value = null
+  editingInvestment.value = null
+  dialogOpen.value = true
+}
+
+function onEditTransaction(tx: Transaction) {
+  editingTransaction.value = tx
+  editingRecurrent.value = null
+  editingInvestment.value = null
+  dialogOpen.value = true
+}
+
+function onEditRecurrent(rec: Recurrent) {
+  editingTransaction.value = null
+  editingRecurrent.value = rec
+  editingInvestment.value = null
+  dialogOpen.value = true
+}
+
+function onEditInvestment(inv: Investment) {
+  editingTransaction.value = null
+  editingRecurrent.value = null
+  editingInvestment.value = inv
+  dialogOpen.value = true
+}
 
 function onSaved() {
   dialogOpen.value = false
@@ -44,17 +85,22 @@ function onSaved() {
 
       <Dialog v-model:open="dialogOpen">
         <DialogTrigger as-child>
-          <Button>
+          <Button @click="openNew">
             <Plus class="h-4 w-4 mr-2" />
             Nova Movimentação
           </Button>
         </DialogTrigger>
         <DialogContent class="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Nova Movimentação</DialogTitle>
+            <DialogTitle>{{ dialogTitle }}</DialogTitle>
             <DialogDescription>Preencha os dados da movimentação</DialogDescription>
           </DialogHeader>
-          <MovimentacaoForm @saved="onSaved" />
+          <MovimentacaoForm
+            :edit-transaction="editingTransaction"
+            :edit-recurrent="editingRecurrent"
+            :edit-investment="editingInvestment"
+            @saved="onSaved"
+          />
         </DialogContent>
       </Dialog>
     </div>
@@ -63,16 +109,13 @@ function onSaved() {
     <template v-if="loading">
       <Card>
         <CardContent class="pt-6 space-y-4">
-          <!-- Skeleton filtros (colapsado = só o botão) -->
           <Skeleton class="h-9 w-full rounded-md" />
           <Separator />
-          <!-- Skeleton tabs -->
            <div class="flex gap-2">
              <Skeleton class="h-9 w-full rounded-md" />
              <Skeleton class="h-9 w-full rounded-md" />
              <Skeleton class="h-9 w-full rounded-md" />
            </div>
-          <!-- Skeleton linhas da tabela -->
           <div class="space-y-2 pt-2">
             <Skeleton v-for="i in 6" :key="i" class="h-10 w-full" />
           </div>
@@ -81,6 +124,11 @@ function onSaved() {
     </template>
 
     <!-- Lista -->
-    <MovimentacoesList v-else />
+    <MovimentacoesList
+      v-else
+      @edit-transaction="onEditTransaction"
+      @edit-recurrent="onEditRecurrent"
+      @edit-investment="onEditInvestment"
+    />
   </div>
 </template>

@@ -1,8 +1,84 @@
 {
-  "accounts": [],
-  "transactions": [],
+  "accounts": [
+    {
+      "bank": "inter",
+      "label": "Inter",
+      "type": "bank",
+      "balance_cents": 89000,
+      "card_closing_day": 28,
+      "card_due_day": 4,
+      "id": 1
+    },
+    {
+      "bank": "inter",
+      "label": "Inter Empresas",
+      "type": "bank",
+      "balance_cents": 0,
+      "id": 2
+    },
+    {
+      "bank": "nubank",
+      "label": "Nubank Principal",
+      "type": "bank",
+      "balance_cents": 0,
+      "id": 3
+    }
+  ],
+  "transactions": [
+    {
+      "accountId": 1,
+      "date": "2026-02-24",
+      "type": "expense",
+      "category": "Supermercado",
+      "amount_cents": -10000,
+      "tags": [
+        "supermercado"
+      ],
+      "paid": false,
+      "installment": null,
+      "id": "a7d89137-4016-4f71-a8dd-bf09551663c7"
+    },
+    {
+      "accountId": 1,
+      "date": "2026-02-24",
+      "type": "expense",
+      "category": "Supermercado",
+      "amount_cents": -1,
+      "paid": false,
+      "installment": null,
+      "id": "c829230f-adac-49c8-aab8-85772bee5d7a"
+    }
+  ],
   "recurrents": [],
-  "investments": [],
-  "tags": [],
+  "investments": [
+    {
+      "accountId": 1,
+      "investment_type": "fii",
+      "asset_tag": "MXRF11",
+      "applied_cents": 72000,
+      "details": {
+        "quantity": 80,
+        "avg_unit_price_cents": 900
+      },
+      "id": "6b5aa29f-4eb2-47de-9720-34c0a6945c23"
+    },
+    {
+      "accountId": 1,
+      "investment_type": "fii",
+      "asset_tag": "MXRF11",
+      "applied_cents": 9500,
+      "details": {
+        "quantity": 5,
+        "avg_unit_price_cents": 1900
+      },
+      "id": "7b7cc083-22d1-4203-9fcc-198172d5fbd4"
+    }
+  ],
+  "tags": [
+    {
+      "id": "7805f7b7-6bd6-4e5e-bff8-625ff53e4e04",
+      "name": "supermercado"
+    }
+  ],
   "history": []
 }
