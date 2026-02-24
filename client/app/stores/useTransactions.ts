@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { v4 as uuid } from 'uuid'
 import type { Transaction, Recurrent } from '~/schemas/zod-schemas'
 import { apiGet, apiPost, apiPatch, apiDelete } from '~/utils/api'
-import { addMonths, monthKey, nowISO } from '~/utils/dates'
+import { addMonths, monthKey } from '~/utils/dates'
 import { useAccountsStore } from './useAccounts'
 
 export const useTransactionsStore = defineStore('transactions', () => {
@@ -68,6 +68,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
     type: Transaction['type']
     category: string
     amount_cents: number
+    installmentAmountCents: number
     description?: string
     tags?: string[]
     paid?: boolean
@@ -85,7 +86,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
         date: installmentDate,
         type: base.type,
         category: base.category,
-        amount_cents: base.amount_cents,
+        amount_cents: base.installmentAmountCents,
         description: base.description,
         tags: base.tags,
         paid: i === 1 ? (base.paid ?? false) : false,
@@ -105,7 +106,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
       const accountsStore = useAccountsStore()
       await accountsStore.adjustBalance(
         base.accountId,
-        base.amount_cents,
+        base.installmentAmountCents,
         `Parcela 1/${base.totalInstallments} - ${base.product}`,
       )
     }
@@ -128,6 +129,21 @@ export const useTransactionsStore = defineStore('transactions', () => {
     await accountsStore.adjustBalance(tx.accountId, tx.amount_cents, note)
   }
 
+  async function markUnpaid(txId: string) {
+    const tx = transactions.value.find(t => t.id === txId)
+    if (!tx || !tx.paid) return
+
+    await apiPatch(`/transactions/${txId}`, { paid: false })
+    tx.paid = false
+
+    const accountsStore = useAccountsStore()
+    const note = tx.installment
+      ? `Estorno parcela ${tx.installment.index}/${tx.installment.total} - ${tx.installment.product}`
+      : `Estorno - ${tx.description || tx.category}`
+
+    await accountsStore.adjustBalance(tx.accountId, -tx.amount_cents, note)
+  }
+
   async function updateTransaction(id: string, patch: Partial<Transaction>) {
     const updated = await apiPatch<Transaction>(`/transactions/${id}`, patch)
     const idx = transactions.value.findIndex(t => t.id === id)
@@ -140,5 +156,14 @@ export const useTransactionsStore = defineStore('transactions', () => {
     transactions.value = transactions.value.filter(t => t.id !== id)
   }
 
-  return { transactions, loadTransactions, addTransaction, updateTransaction, deleteTransaction, generateInstallments, markPaid, unpaidForMonth, hasRecurrentTransaction, payRecurrent }
+  /** Exclui todas as parcelas de um grupo (mesmo parentId) */
+  async function deleteInstallmentGroup(parentId: string) {
+    const parcelas = transactions.value.filter(t => t.installment?.parentId === parentId)
+    for (const p of parcelas) {
+      await apiDelete(`/transactions/${p.id}`)
+    }
+    transactions.value = transactions.value.filter(t => t.installment?.parentId !== parentId)
+  }
+
+  return { transactions, loadTransactions, addTransaction, updateTransaction, deleteTransaction, deleteInstallmentGroup, generateInstallments, markPaid, markUnpaid, unpaidForMonth, hasRecurrentTransaction, payRecurrent }
 })

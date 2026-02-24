@@ -1,17 +1,19 @@
 <script setup lang="ts">
 import { ArrowLeftRight, Plus } from 'lucide-vue-next'
-import type { Transaction, Recurrent, Investment } from '~/schemas/zod-schemas'
+import type { Transaction, Recurrent } from '~/schemas/zod-schemas'
 import { useAccountsStore } from '~/stores/useAccounts'
 import { useTagsStore } from '~/stores/useTags'
 import { useTransactionsStore } from '~/stores/useTransactions'
 import { useRecurrentsStore } from '~/stores/useRecurrents'
-import { useInvestmentsStore } from '~/stores/useInvestments'
+import { useInvestmentPositionsStore } from '~/stores/useInvestmentPositions'
+import { useInvestmentEventsStore } from '~/stores/useInvestmentEvents'
 
 const accountsStore = useAccountsStore()
 const tagsStore = useTagsStore()
 const transactionsStore = useTransactionsStore()
 const recurrentsStore = useRecurrentsStore()
-const investmentsStore = useInvestmentsStore()
+const investmentPositionsStore = useInvestmentPositionsStore()
+const investmentEventsStore = useInvestmentEventsStore()
 
 const dialogOpen = ref(false)
 const loading = ref(true)
@@ -19,12 +21,10 @@ const loading = ref(true)
 // Estado de edição
 const editingTransaction = ref<Transaction | null>(null)
 const editingRecurrent = ref<Recurrent | null>(null)
-const editingInvestment = ref<Investment | null>(null)
 
 const dialogTitle = computed(() => {
   if (editingTransaction.value) return 'Editar Transação'
   if (editingRecurrent.value) return 'Editar Recorrente'
-  if (editingInvestment.value) return 'Editar Investimento'
   return 'Nova Movimentação'
 })
 
@@ -35,7 +35,8 @@ onMounted(async () => {
       tagsStore.loadTags(),
       transactionsStore.loadTransactions(),
       recurrentsStore.loadRecurrents(),
-      investmentsStore.loadInvestments(),
+      investmentPositionsStore.loadPositions(),
+      investmentEventsStore.loadEvents(),
     ])
   } finally {
     loading.value = false
@@ -45,28 +46,18 @@ onMounted(async () => {
 function openNew() {
   editingTransaction.value = null
   editingRecurrent.value = null
-  editingInvestment.value = null
   dialogOpen.value = true
 }
 
 function onEditTransaction(tx: Transaction) {
   editingTransaction.value = tx
   editingRecurrent.value = null
-  editingInvestment.value = null
   dialogOpen.value = true
 }
 
 function onEditRecurrent(rec: Recurrent) {
   editingTransaction.value = null
   editingRecurrent.value = rec
-  editingInvestment.value = null
-  dialogOpen.value = true
-}
-
-function onEditInvestment(inv: Investment) {
-  editingTransaction.value = null
-  editingRecurrent.value = null
-  editingInvestment.value = inv
   dialogOpen.value = true
 }
 
@@ -98,7 +89,6 @@ function onSaved() {
           <MovimentacaoForm
             :edit-transaction="editingTransaction"
             :edit-recurrent="editingRecurrent"
-            :edit-investment="editingInvestment"
             @saved="onSaved"
           />
         </DialogContent>
@@ -128,7 +118,6 @@ function onSaved() {
       v-else
       @edit-transaction="onEditTransaction"
       @edit-recurrent="onEditRecurrent"
-      @edit-investment="onEditInvestment"
     />
   </div>
 </template>

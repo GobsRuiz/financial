@@ -158,3 +158,55 @@ export const historySchema = z.object({
 })
 
 export type HistoryItem = z.infer<typeof historySchema> & { id: string }
+
+// ── Investment Position / Events ──
+export const investmentBucketSchema = z.enum(['variable', 'fixed'])
+
+export const investmentPositionSchema = z.object({
+  id: z.string().uuid().optional(),
+  accountId: z.number().int({ message: 'Conta é obrigatória' }),
+  bucket: investmentBucketSchema,
+  investment_type: investmentTypeSchema,
+  asset_code: z.string().min(1, 'Código é obrigatório'),
+  name: z.string().optional(),
+  is_active: z.boolean().default(true),
+  quantity_total: z.number().nonnegative().optional(),
+  avg_cost_cents: z.number().int().nonnegative().optional(),
+  invested_cents: z.number().int().default(0),
+  principal_cents: z.number().int().optional(),
+  current_value_cents: z.number().int().optional(),
+  metadata: z.object({
+    issuer: z.string().optional(),
+    indexer: investmentIndexerSchema.optional(),
+    rate_mode: z.enum(['annual_percent', 'pct_cdi']).optional(),
+    rate_percent: z.number().nonnegative().optional(),
+    maturity_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    liquidity: investmentLiquiditySchema.optional(),
+  }).optional(),
+})
+
+export type InvestmentPosition = z.infer<typeof investmentPositionSchema> & { id: string }
+
+export const investmentEventTypeSchema = z.enum([
+  'buy',
+  'sell',
+  'income',
+  'contribution',
+  'withdrawal',
+  'maturity',
+])
+
+export const investmentEventSchema = z.object({
+  id: z.string().uuid().optional(),
+  positionId: z.string().uuid({ message: 'Posição é obrigatória' }),
+  accountId: z.number().int({ message: 'Conta é obrigatória' }),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida (YYYY-MM-DD)'),
+  event_type: investmentEventTypeSchema,
+  amount_cents: z.number().int(),
+  quantity: z.number().nonnegative().optional(),
+  unit_price_cents: z.number().int().nonnegative().optional(),
+  fees_cents: z.number().int().nonnegative().optional(),
+  note: z.string().optional(),
+})
+
+export type InvestmentEvent = z.infer<typeof investmentEventSchema> & { id: string }

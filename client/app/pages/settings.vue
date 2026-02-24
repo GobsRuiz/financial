@@ -7,6 +7,9 @@ import { useRecurrentsStore } from '~/stores/useRecurrents'
 import { useInvestmentsStore } from '~/stores/useInvestments'
 import { useTagsStore } from '~/stores/useTags'
 import { useHistoryStore } from '~/stores/useHistory'
+import { useInvestmentPositionsStore } from '~/stores/useInvestmentPositions'
+import { useInvestmentEventsStore } from '~/stores/useInvestmentEvents'
+import { apiDelete } from '~/utils/api'
 
 const accountsStore = useAccountsStore()
 const transactionsStore = useTransactionsStore()
@@ -14,6 +17,8 @@ const recurrentsStore = useRecurrentsStore()
 const investmentsStore = useInvestmentsStore()
 const tagsStore = useTagsStore()
 const historyStore = useHistoryStore()
+const investmentPositionsStore = useInvestmentPositionsStore()
+const investmentEventsStore = useInvestmentEventsStore()
 
 const appToast = useAppToast()
 const confirmOpen = ref(false)
@@ -27,6 +32,8 @@ async function handleClearAll() {
       { items: transactionsStore.transactions, path: '/transactions' },
       { items: recurrentsStore.recurrents, path: '/recurrents' },
       { items: investmentsStore.investments, path: '/investments' },
+      { items: investmentPositionsStore.positions, path: '/investment_positions' },
+      { items: investmentEventsStore.events, path: '/investment_events' },
       { items: tagsStore.tags, path: '/tags' },
       { items: historyStore.history, path: '/history' },
       { items: accountsStore.accounts, path: '/accounts' },
@@ -41,6 +48,8 @@ async function handleClearAll() {
     transactionsStore.transactions = []
     recurrentsStore.recurrents = []
     investmentsStore.investments = []
+    investmentPositionsStore.positions = []
+    investmentEventsStore.events = []
     tagsStore.tags = []
     historyStore.history = []
     accountsStore.accounts = []

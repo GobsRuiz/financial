@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ChevronDown, ChevronRight, Filter, ChevronsUpDown, X, MoreHorizontal, Pencil, Trash2, Eye } from 'lucide-vue-next'
-import type { Transaction, Recurrent, Investment } from '~/schemas/zod-schemas'
+import type { Transaction, Recurrent, InvestmentEvent } from '~/schemas/zod-schemas'
 import { useTransactionsStore } from '~/stores/useTransactions'
 import { useRecurrentsStore } from '~/stores/useRecurrents'
-import { useInvestmentsStore } from '~/stores/useInvestments'
+import { useInvestmentPositionsStore } from '~/stores/useInvestmentPositions'
+import { useInvestmentEventsStore } from '~/stores/useInvestmentEvents'
 import { useAccountsStore } from '~/stores/useAccounts'
 import { formatCentsToBRL } from '~/utils/money'
 import { monthKey } from '~/utils/dates'
@@ -12,12 +13,12 @@ import { useAppToast } from '~/composables/useAppToast'
 const emit = defineEmits<{
   'edit-transaction': [tx: Transaction]
   'edit-recurrent': [rec: Recurrent]
-  'edit-investment': [inv: Investment]
 }>()
 
 const transactionsStore = useTransactionsStore()
 const recurrentsStore = useRecurrentsStore()
-const investmentsStore = useInvestmentsStore()
+const investmentPositionsStore = useInvestmentPositionsStore()
+const investmentEventsStore = useInvestmentEventsStore()
 const accountsStore = useAccountsStore()
 const appToast = useAppToast()
 
@@ -52,7 +53,7 @@ function openViewTransaction(tx: Transaction) {
 
 // ── Confirm Delete ──
 const confirmDeleteOpen = ref(false)
-const deleteTarget = ref<{ type: 'transaction' | 'recurrent' | 'investment'; id: string; label: string } | null>(null)
+const deleteTarget = ref<{ type: 'transaction' | 'installment-group' | 'recurrent' | 'investment-event'; id: string; label: string } | null>(null)
 
 function toggleExpand(parentId: string) {
   if (expandedParents.value.has(parentId)) {
@@ -66,34 +67,20 @@ function getAccountLabel(accountId: number) {
   return accountsStore.accounts.find(a => a.id === accountId)?.label ?? '—'
 }
 
-function getInvestmentTypeLabel(type?: Investment['investment_type']) {
-  const map: Record<string, string> = {
-    fii: 'FII',
-    cripto: 'Cripto',
-    caixinha: 'Caixinha',
-    cdb: 'CDB',
-    cdi: 'CDI',
-    tesouro: 'Tesouro',
-    lci: 'LCI',
-    lca: 'LCA',
-    outro: 'Outro',
-  }
-  return map[type ?? 'outro'] ?? 'Outro'
+function getPositionLabel(positionId: string) {
+  const p = investmentPositionsStore.positions.find(pos => pos.id === positionId)
+  if (!p) return '—'
+  return `${p.asset_code} · ${p.name}`
 }
 
-function getInvestmentDetailsSummary(inv: Investment) {
-  const quantity = inv.details?.quantity
-  if (quantity != null) return `${quantity} unidades`
-  if (inv.details?.indexer || inv.details?.rate_percent != null) {
-    const indexer = inv.details.indexer ?? '—'
-    const rate = inv.details.rate_percent != null ? `${inv.details.rate_percent}%` : '—'
-    return `${indexer} • ${rate}`
-  }
-  return inv.description ?? '—'
+function getPositionBucketLabel(positionId: string) {
+  const p = investmentPositionsStore.positions.find(pos => pos.id === positionId)
+  if (!p) return '—'
+  return p.bucket === 'variable' ? 'Renda Variável' : 'Renda Fixa'
 }
 
 // ── Ações ──
-function requestDelete(type: 'transaction' | 'recurrent' | 'investment', id: string, label: string) {
+function requestDelete(type: 'transaction' | 'installment-group' | 'recurrent' | 'investment-event', id: string, label: string) {
   deleteTarget.value = { type, id, label }
   confirmDeleteOpen.value = true
 }
@@ -105,10 +92,12 @@ async function confirmDelete() {
     const { type, id } = deleteTarget.value
     if (type === 'transaction') {
       await transactionsStore.deleteTransaction(id)
+    } else if (type === 'installment-group') {
+      await transactionsStore.deleteInstallmentGroup(id)
     } else if (type === 'recurrent') {
       await recurrentsStore.deleteRecurrent(id)
     } else {
-      await investmentsStore.deleteInvestment(id)
+      await investmentEventsStore.deleteEvent(id)
     }
     appToast.success({ title: 'Excluído com sucesso' })
   } catch (e: any) {
@@ -160,11 +149,11 @@ const filteredRecurrents = computed(() => {
 })
 
 const filteredInvestments = computed(() => {
-  let invs = investmentsStore.investments
+  let invs = investmentEventsStore.events
   if (invFilterConta.value) {
     invs = invs.filter(i => i.accountId === invFilterConta.value)
   }
-  return invs
+  return [...invs].sort((a, b) => b.date.localeCompare(a.date))
 })
 
 const txStatusOptions = [
@@ -309,7 +298,7 @@ function clearInvFilters() {
                     </button>
                   </TableCell>
                   <TableCell :class="tx.amount_cents < 0 ? 'text-red-500' : 'text-green-500'">
-                    {{ formatCentsToBRL(Math.abs(tx.amount_cents)) }}
+                    {{ formatCentsToBRL(Math.abs(tx.installment ? tx.amount_cents * tx.installment.total : tx.amount_cents)) }}
                   </TableCell>
                   <TableCell>{{ tx.category }}</TableCell>
                   <TableCell>
@@ -350,7 +339,9 @@ function clearInvFilters() {
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           variant="destructive"
-                          @click.stop="requestDelete('transaction', tx.id, tx.description || tx.category)"
+                          @click.stop="tx.installment
+                            ? requestDelete('installment-group', tx.installment.parentId, `${tx.installment.product} ${tx.installment.total}x`)
+                            : requestDelete('transaction', tx.id, tx.description || tx.category)"
                         >
                           <Trash2 class="h-4 w-4 mr-2" />
                           Excluir
@@ -524,29 +515,27 @@ function clearInvFilters() {
           <Table v-if="filteredInvestments.length">
             <TableHeader>
               <TableRow>
-                <TableHead>Ativo</TableHead>
-                <TableHead>Tipo</TableHead>
+                <TableHead>Data</TableHead>
+                <TableHead>Posição</TableHead>
+                <TableHead>Grupo</TableHead>
                 <TableHead>Conta</TableHead>
-                <TableHead>Resumo</TableHead>
-                <TableHead class="text-right">Aplicado</TableHead>
-                <TableHead class="text-right">Atual</TableHead>
+                <TableHead>Evento</TableHead>
+                <TableHead class="text-right">Qtd</TableHead>
+                <TableHead class="text-right">Preço Unit.</TableHead>
+                <TableHead class="text-right">Valor</TableHead>
                 <TableHead class="w-10"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               <TableRow v-for="inv in filteredInvestments" :key="inv.id">
-                <TableCell>
-                  <Badge>{{ inv.asset_tag }}</Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="secondary">{{ getInvestmentTypeLabel(inv.investment_type) }}</Badge>
-                </TableCell>
+                <TableCell>{{ inv.date }}</TableCell>
+                <TableCell>{{ getPositionLabel(inv.positionId) }}</TableCell>
+                <TableCell><Badge variant="secondary">{{ getPositionBucketLabel(inv.positionId) }}</Badge></TableCell>
                 <TableCell>{{ getAccountLabel(inv.accountId) }}</TableCell>
-                <TableCell>{{ getInvestmentDetailsSummary(inv) }}</TableCell>
-                <TableCell class="text-right">{{ formatCentsToBRL(inv.applied_cents) }}</TableCell>
-                <TableCell class="text-right">
-                  {{ inv.current_cents ? formatCentsToBRL(inv.current_cents) : '—' }}
-                </TableCell>
+                <TableCell><Badge variant="outline">{{ inv.event_type }}</Badge></TableCell>
+                <TableCell class="text-right">{{ inv.quantity ?? '—' }}</TableCell>
+                <TableCell class="text-right">{{ inv.unit_price_cents ? formatCentsToBRL(inv.unit_price_cents) : '—' }}</TableCell>
+                <TableCell class="text-right">{{ formatCentsToBRL(inv.amount_cents) }}</TableCell>
                 <TableCell>
                   <DropdownMenu>
                     <DropdownMenuTrigger as-child>
@@ -555,13 +544,9 @@ function clearInvFilters() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem @click="emit('edit-investment', inv)">
-                        <Pencil class="h-4 w-4 mr-2" />
-                        Editar
-                      </DropdownMenuItem>
                       <DropdownMenuItem
                         variant="destructive"
-                        @click="requestDelete('investment', inv.id, inv.asset_tag)"
+                        @click="requestDelete('investment-event', inv.id, getPositionLabel(inv.positionId))"
                       >
                         <Trash2 class="h-4 w-4 mr-2" />
                         Excluir

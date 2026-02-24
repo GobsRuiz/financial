@@ -16,9 +16,13 @@ const parcelas = computed(() =>
     .sort((a, b) => (a.installment?.index ?? 0) - (b.installment?.index ?? 0))
 )
 
-async function togglePaid(tx: Transaction) {
-  if (tx.paid) return
-  await transactionsStore.markPaid(tx.id)
+async function togglePaid(tx: Transaction, checked: boolean | 'indeterminate') {
+  if (checked === 'indeterminate') return
+  if (checked) {
+    await transactionsStore.markPaid(tx.id)
+    return
+  }
+  await transactionsStore.markUnpaid(tx.id)
 }
 </script>
 
@@ -32,9 +36,8 @@ async function togglePaid(tx: Transaction) {
     >
       <div class="flex items-center gap-3">
         <Checkbox
-          :checked="p.paid"
-          :disabled="p.paid"
-          @update:checked="togglePaid(p)"
+          :model-value="p.paid"
+          @update:model-value="(val) => togglePaid(p, val)"
         />
         <span :class="p.paid ? 'line-through text-muted-foreground' : ''">
           Parcela {{ p.installment?.index }}/{{ p.installment?.total }}
