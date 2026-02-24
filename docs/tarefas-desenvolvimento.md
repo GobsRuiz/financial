@@ -92,61 +92,61 @@
   * [x] `appendHistory(accountId, balance, note)`
   * [x] `loadHistory()`
 
-## 1.4 Componentes base (UI/UX)
+## 1.4 Componentes base (UI/UX) ✅ CONCLUÍDA
 
-* [ ] `app/components/Sidebar.vue`
+* [x] `app/components/AppSidebar.vue`
 
-  * [ ] links: Dashboard, Movimentações, Pendentes, Contas, Settings (Histórico depois)
-* [ ] `app/layouts/default.vue`
+  * [x] links: Dashboard, Movimentações, Pendentes, Contas, Histórico, Settings
+* [x] `app/layouts/default.vue`
 
-  * [ ] layout com sidebar + content
-  * [ ] tema escuro fixo aplicado
-* [ ] `app/components/TagSelect.vue`
+  * [x] layout com sidebar + content
+  * [x] tema escuro fixo aplicado
+* [x] `app/components/TagSelect.vue`
 
-  * [ ] multi select
-  * [ ] criar tag na hora (ensureTag)
-* [ ] `app/components/ConfirmDialog.vue` (reutilizável)
+  * [x] multi select
+  * [x] criar tag na hora (ensureTag)
+* [x] `app/components/ConfirmDialog.vue` (reutilizável)
 
-## 1.5 Página Movimentações
+## 1.5 Página Movimentações ✅ CONCLUÍDA
 
-* [ ] Criar `app/pages/movimentacoes.vue`
+* [x] Criar `app/pages/movimentacoes.vue`
 
-  * [ ] topo: select tipo (Transação / Recorrente / Investimento)
-  * [ ] render form dinâmico conforme tipo
-  * [ ] render lista abaixo + filtros
+  * [x] topo: select tipo (Transação / Recorrente / Investimento)
+  * [x] render form dinâmico conforme tipo
+  * [x] render lista abaixo + filtros
 
-## 1.6 Form Dinâmico (Movimentação)
+## 1.6 Form Dinâmico (Movimentação) ✅ CONCLUÍDA
 
-* [ ] `app/components/MovimentacaoForm.vue`
+* [x] `app/components/MovimentacaoForm.vue`
 
-  * [ ] Select "tipo de movimentação" (ou receber por prop)
-  * [ ] Form "Transação":
+  * [x] Select "tipo de movimentação" (ou receber por prop)
+  * [x] Form "Transação":
 
-    * [ ] conta, tipo (expense/income/transfer), categoria, valor, data
-    * [ ] tags + descrição opcional
-    * [ ] toggle parcelado + campos (total, valor parcela, produto)
-    * [ ] toggle "pago"
-    * [ ] submit -> validação zod
-    * [ ] se parcelado -> generateInstallments
-  * [ ] Form "Recorrente":
+    * [x] conta, tipo (expense/income/transfer), categoria, valor, data
+    * [x] tags + descrição opcional
+    * [x] toggle parcelado + campos (total, valor parcela, produto)
+    * [x] toggle "pago"
+    * [x] submit -> validação zod
+    * [x] se parcelado -> generateInstallments
+  * [x] Form "Recorrente":
 
-    * [ ] kind (income/expense/benefit), nome, valor, frequência, dia do mês opcional, vencimento opcional, descrição opcional, ativo
-  * [ ] Form "Investimento":
+    * [x] kind (income/expense/benefit), nome, valor, frequência, dia do mês opcional, vencimento opcional, descrição opcional, ativo
+  * [x] Form "Investimento":
 
-    * [ ] conta, asset_tag (select+criar), aplicado, current opcional, descrição opcional
+    * [x] conta, asset_tag (select+criar), aplicado, current opcional, descrição opcional
   * [ ] Máscaras (vue-the-mask) para valor/data/parcela
 
-## 1.7 Lista + Expand de Parcelas
+## 1.7 Lista + Expand de Parcelas ✅ CONCLUÍDA
 
-* [ ] `app/components/MovimentacoesList.vue`
+* [x] `app/components/MovimentacoesList.vue`
 
-  * [ ] filtros: conta, mês, tipo, tags, categoria, status (pago/pendente)
-  * [ ] item transação parcelada aparece como resumo
-  * [ ] botão expandir
-* [ ] `app/components/ParcelasExpansion.vue`
+  * [x] filtros: conta, mês, tipo, tags, categoria, status (pago/pendente)
+  * [x] item transação parcelada aparece como resumo
+  * [x] botão expandir
+* [x] `app/components/ParcelasExpansion.vue`
 
-  * [ ] lista de parcelas do parentId
-  * [ ] checkbox pago por parcela -> markPaid
+  * [x] lista de parcelas do parentId
+  * [x] checkbox pago por parcela -> markPaid
 
 ---
 

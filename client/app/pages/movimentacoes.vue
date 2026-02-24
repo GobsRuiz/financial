@@ -1,17 +1,86 @@
 <script setup lang="ts">
-import { ArrowLeftRight } from 'lucide-vue-next'
+import { ArrowLeftRight, Plus } from 'lucide-vue-next'
+import { useAccountsStore } from '~/stores/useAccounts'
+import { useTagsStore } from '~/stores/useTags'
+import { useTransactionsStore } from '~/stores/useTransactions'
+import { useRecurrentsStore } from '~/stores/useRecurrents'
+import { useInvestmentsStore } from '~/stores/useInvestments'
+
+const accountsStore = useAccountsStore()
+const tagsStore = useTagsStore()
+const transactionsStore = useTransactionsStore()
+const recurrentsStore = useRecurrentsStore()
+const investmentsStore = useInvestmentsStore()
+
+const dialogOpen = ref(false)
+const loading = ref(true)
+
+onMounted(async () => {
+  try {
+    await Promise.all([
+      accountsStore.loadAccounts(),
+      tagsStore.loadTags(),
+      transactionsStore.loadTransactions(),
+      recurrentsStore.loadRecurrents(),
+      investmentsStore.loadInvestments(),
+    ])
+  } finally {
+    loading.value = false
+  }
+})
+
+function onSaved() {
+  dialogOpen.value = false
+}
 </script>
 
 <template>
-  <div>
-    <div class="flex items-center gap-3 mb-6">
-      <ArrowLeftRight class="h-6 w-6 text-muted-foreground" />
-      <h1 class="text-2xl font-bold">Movimentações</h1>
+  <div class="space-y-6">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <ArrowLeftRight class="h-6 w-6 text-muted-foreground" />
+        <h1 class="text-2xl font-bold">Movimentações</h1>
+      </div>
+
+      <Dialog v-model:open="dialogOpen">
+        <DialogTrigger as-child>
+          <Button>
+            <Plus class="h-4 w-4 mr-2" />
+            Nova Movimentação
+          </Button>
+        </DialogTrigger>
+        <DialogContent class="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Nova Movimentação</DialogTitle>
+            <DialogDescription>Preencha os dados da movimentação</DialogDescription>
+          </DialogHeader>
+          <MovimentacaoForm @saved="onSaved" />
+        </DialogContent>
+      </Dialog>
     </div>
-    <Card>
-      <CardContent class="p-6">
-        <p class="text-muted-foreground">Em desenvolvimento...</p>
-      </CardContent>
-    </Card>
+
+    <!-- Skeleton -->
+    <template v-if="loading">
+      <Card>
+        <CardContent class="pt-6 space-y-4">
+          <!-- Skeleton filtros (colapsado = só o botão) -->
+          <Skeleton class="h-9 w-full rounded-md" />
+          <Separator />
+          <!-- Skeleton tabs -->
+           <div class="flex gap-2">
+             <Skeleton class="h-9 w-full rounded-md" />
+             <Skeleton class="h-9 w-full rounded-md" />
+             <Skeleton class="h-9 w-full rounded-md" />
+           </div>
+          <!-- Skeleton linhas da tabela -->
+          <div class="space-y-2 pt-2">
+            <Skeleton v-for="i in 6" :key="i" class="h-10 w-full" />
+          </div>
+        </CardContent>
+      </Card>
+    </template>
+
+    <!-- Lista -->
+    <MovimentacoesList v-else />
   </div>
 </template>

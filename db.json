@@ -1,8 +1,140 @@
 {
-  "accounts": [],
-  "transactions": [],
-  "recurrents": [],
-  "investments": [],
-  "tags": [],
-  "history": []
+  "accounts": [
+    { "id": 1, "bank": "nubank", "label": "Nubank", "type": "bank", "balance_cents": 485000, "card_closing_day": 25, "card_due_day": 10 },
+    { "id": 2, "bank": "inter", "label": "Inter", "type": "bank", "balance_cents": 320000 }
+  ],
+  "transactions": [
+    {
+      "id": "tx-001",
+      "accountId": 1,
+      "date": "2026-02-03",
+      "type": "expense",
+      "category": "supermercado",
+      "amount_cents": -18500,
+      "description": "Compras da semana",
+      "tags": ["mercado", "alimentação"],
+      "paid": true,
+      "installment": null
+    },
+    {
+      "id": "tx-002",
+      "accountId": 1,
+      "date": "2026-02-05",
+      "type": "income",
+      "category": "salário",
+      "amount_cents": 650000,
+      "description": "Salário fevereiro",
+      "tags": ["salário"],
+      "paid": true,
+      "installment": null
+    },
+    {
+      "id": "tx-003",
+      "accountId": 2,
+      "date": "2026-02-10",
+      "type": "expense",
+      "category": "transporte",
+      "amount_cents": -5500,
+      "description": "Uber",
+      "tags": ["transporte"],
+      "paid": true,
+      "installment": null
+    },
+    {
+      "id": "tx-004",
+      "accountId": 1,
+      "date": "2026-02-12",
+      "type": "expense",
+      "category": "eletrônicos",
+      "amount_cents": -25000,
+      "description": "",
+      "tags": ["casa"],
+      "paid": true,
+      "installment": { "parentId": "parc-001", "total": 10, "index": 1, "product": "Geladeira" }
+    },
+    {
+      "id": "tx-005",
+      "accountId": 1,
+      "date": "2026-03-12",
+      "type": "expense",
+      "category": "eletrônicos",
+      "amount_cents": -25000,
+      "description": "",
+      "tags": ["casa"],
+      "paid": false,
+      "installment": { "parentId": "parc-001", "total": 10, "index": 2, "product": "Geladeira" }
+    },
+    {
+      "id": "tx-006",
+      "accountId": 1,
+      "date": "2026-04-12",
+      "type": "expense",
+      "category": "eletrônicos",
+      "amount_cents": -25000,
+      "description": "",
+      "tags": ["casa"],
+      "paid": false,
+      "installment": { "parentId": "parc-001", "total": 10, "index": 3, "product": "Geladeira" }
+    },
+    {
+      "id": "tx-007",
+      "accountId": 2,
+      "date": "2026-02-15",
+      "type": "expense",
+      "category": "lazer",
+      "amount_cents": -8900,
+      "description": "Cinema + pipoca",
+      "tags": ["lazer"],
+      "paid": true,
+      "installment": null
+    },
+    {
+      "id": "tx-008",
+      "accountId": 1,
+      "date": "2026-02-20",
+      "type": "expense",
+      "category": "saúde",
+      "amount_cents": -15000,
+      "description": "Farmácia",
+      "tags": ["saúde"],
+      "paid": false,
+      "installment": null
+    },
+    {
+      "id": "tx-009",
+      "accountId": 2,
+      "date": "2026-02-18",
+      "type": "income",
+      "category": "freelance",
+      "amount_cents": 120000,
+      "description": "Projeto site cliente",
+      "tags": ["freelance"],
+      "paid": true,
+      "installment": null
+    }
+  ],
+  "recurrents": [
+    { "id": "rec-001", "accountId": 1, "kind": "expense", "name": "Academia", "amount_cents": -12000, "frequency": "monthly", "day_of_month": 5, "description": "Smart Fit", "active": true },
+    { "id": "rec-002", "accountId": 1, "kind": "expense", "name": "Aluguel", "amount_cents": -180000, "frequency": "monthly", "day_of_month": 10, "due_day": 10, "description": "", "active": true },
+    { "id": "rec-003", "accountId": 1, "kind": "income", "name": "Salário", "amount_cents": 650000, "frequency": "monthly", "day_of_month": 5, "description": "CLT", "active": true },
+    { "id": "rec-004", "accountId": 2, "kind": "benefit", "name": "Vale Refeição", "amount_cents": 88000, "frequency": "monthly", "day_of_month": 1, "description": "Sodexo", "active": true }
+  ],
+  "investments": [
+    { "id": "inv-001", "accountId": 2, "asset_tag": "MXRF11", "applied_cents": 200000, "current_cents": 205000, "description": "FII logística" },
+    { "id": "inv-002", "accountId": 2, "asset_tag": "SELIC", "applied_cents": 500000, "current_cents": 512000, "description": "Tesouro Selic 2029" }
+  ],
+  "tags": [
+    { "id": "t1", "name": "mercado" },
+    { "id": "t2", "name": "alimentação" },
+    { "id": "t3", "name": "salário" },
+    { "id": "t4", "name": "transporte" },
+    { "id": "t5", "name": "casa" },
+    { "id": "t6", "name": "lazer" },
+    { "id": "t7", "name": "saúde" },
+    { "id": "t8", "name": "freelance" }
+  ],
+  "history": [
+    { "id": "h-001", "accountId": 1, "date": "2026-02-01", "balance_cents": 500000, "note": "Saldo inicial fevereiro" },
+    { "id": "h-002", "accountId": 2, "date": "2026-02-01", "balance_cents": 300000, "note": "Saldo inicial fevereiro" }
+  ]
 }
