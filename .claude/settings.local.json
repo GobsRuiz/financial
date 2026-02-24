@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(test:*)",
+      "Bash(\"c:/MyFiles/Programming/Me/financeiro/client/app/pages/index.vue\":*)",
+      "Bash(\"c:/MyFiles/Programming/Me/financeiro/electron/main.js\":*)",
+      "WebFetch(domain:ui.nuxt.com)",
+      "WebFetch(domain:www.shadcn-vue.com)",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:radix.shadcn-vue.com)",
+      "WebFetch(domain:shadcn-vue.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(npm install:*)"
+    ]
+  }
+}
