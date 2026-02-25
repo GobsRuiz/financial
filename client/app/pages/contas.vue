@@ -9,19 +9,69 @@ const accountsStore = useAccountsStore()
 const transactionsStore = useTransactionsStore()
 
 const loading = ref(true)
+const refreshing = ref(false)
+const loadFailedSources = ref<string[]>([])
+const hasSuccessfulLoad = ref(false)
 const dialogOpen = ref(false)
 const editingAccount = ref<Account | null>(null)
 
+const sourceLoaders = [
+  { label: 'contas', load: () => accountsStore.loadAccounts() },
+  { label: 'movimentacoes', load: () => transactionsStore.loadTransactions() },
+]
+
 onMounted(async () => {
+  await loadPageData()
+})
+
+const hasFatalLoadError = computed(() =>
+  loadFailedSources.value.length === sourceLoaders.length && !hasSuccessfulLoad.value,
+)
+
+const hasPartialLoadError = computed(() =>
+  loadFailedSources.value.length > 0 && !hasFatalLoadError.value,
+)
+
+const loadErrorMessage = computed(() => {
+  if (!loadFailedSources.value.length) return ''
+  return `Falha ao carregar: ${loadFailedSources.value.join(', ')}.`
+})
+
+async function loadPageData() {
+  const firstLoad = !hasSuccessfulLoad.value && !refreshing.value
+  if (firstLoad) {
+    loading.value = true
+  } else {
+    refreshing.value = true
+  }
+
   try {
-    await Promise.all([
-      accountsStore.loadAccounts(),
-      transactionsStore.loadTransactions(),
-    ])
+    const results = await Promise.allSettled(sourceLoaders.map(item => item.load()))
+
+    const failed: string[] = []
+    let anySuccess = false
+
+    for (const [index, result] of results.entries()) {
+      if (result.status === 'fulfilled') {
+        anySuccess = true
+        continue
+      }
+
+      const source = sourceLoaders[index]
+      if (!source) continue
+      failed.push(source.label)
+      console.error(`Erro ao carregar ${source.label}:`, result.reason)
+    }
+
+    loadFailedSources.value = failed
+    if (anySuccess) {
+      hasSuccessfulLoad.value = true
+    }
   } finally {
     loading.value = false
+    refreshing.value = false
   }
-})
+}
 
 const creditInvoiceByAccount = computed(() => {
   const grouped = new Map<number, number>()
@@ -92,8 +142,36 @@ function onSaved() {
       </div>
     </template>
 
-    <template v-else-if="accountsStore.accounts.length">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <template v-else-if="hasFatalLoadError">
+      <Card class="border-red-500/30 bg-red-500/5">
+        <CardContent class="space-y-3 pt-6">
+          <p class="font-semibold text-red-500">Nao foi possivel carregar contas</p>
+          <p class="text-sm text-muted-foreground">
+            {{ loadErrorMessage || 'Verifique o servidor/API e tente novamente.' }}
+          </p>
+          <Button :disabled="refreshing" @click="loadPageData">
+            {{ refreshing ? 'Tentando novamente...' : 'Tentar novamente' }}
+          </Button>
+        </CardContent>
+      </Card>
+    </template>
+
+    <template v-else>
+      <Card
+        v-if="hasPartialLoadError"
+        class="border-yellow-500/30 bg-yellow-500/5"
+      >
+        <CardContent class="flex flex-col gap-3 pt-6 md:flex-row md:items-center md:justify-between">
+          <p class="text-sm text-muted-foreground">
+            {{ loadErrorMessage }} Alguns dados podem estar incompletos.
+          </p>
+          <Button variant="outline" :disabled="refreshing" @click="loadPageData">
+            {{ refreshing ? 'Atualizando...' : 'Tentar novamente' }}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <div v-if="accountsStore.accounts.length" class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Card
           v-for="acc in accountsStore.accounts"
           :key="acc.id"
@@ -142,12 +220,12 @@ function onSaved() {
           </CardContent>
         </Card>
       </div>
-    </template>
 
-    <Card v-else>
-      <CardContent class="py-8">
-        <p class="text-center text-muted-foreground">Nenhuma conta cadastrada.</p>
-      </CardContent>
-    </Card>
+      <Card v-else>
+        <CardContent class="py-8">
+          <p class="text-center text-muted-foreground">Nenhuma conta cadastrada.</p>
+        </CardContent>
+      </Card>
+    </template>
   </div>
 </template>

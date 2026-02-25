@@ -11,6 +11,15 @@ const transactionsStore = useTransactionsStore()
 const recurrentsStore = useRecurrentsStore()
 
 const loading = ref(true)
+const refreshing = ref(false)
+const loadFailedSources = ref<string[]>([])
+const hasSuccessfulLoad = ref(false)
+
+const sourceLoaders = [
+  { label: 'contas', load: () => accountsStore.loadAccounts() },
+  { label: 'movimentacoes', load: () => transactionsStore.loadTransactions() },
+  { label: 'recorrentes', load: () => recurrentsStore.loadRecurrents() },
+]
 
 // Mês selecionado (inicia no mês atual)
 const selectedMonth = ref(monthKey(dayjs().format('YYYY-MM-DD')))
@@ -31,16 +40,56 @@ function nextMonth() {
   selectedMonth.value = d.format('YYYY-MM')
 }
 
-onMounted(async () => {
+const hasFatalLoadError = computed(() =>
+  loadFailedSources.value.length === sourceLoaders.length && !hasSuccessfulLoad.value,
+)
+
+const hasPartialLoadError = computed(() =>
+  loadFailedSources.value.length > 0 && !hasFatalLoadError.value,
+)
+
+const loadErrorMessage = computed(() => {
+  if (!loadFailedSources.value.length) return ''
+  return `Falha ao carregar: ${loadFailedSources.value.join(', ')}.`
+})
+
+async function loadPageData() {
+  const firstLoad = !hasSuccessfulLoad.value && !refreshing.value
+  if (firstLoad) {
+    loading.value = true
+  } else {
+    refreshing.value = true
+  }
+
   try {
-    await Promise.all([
-      accountsStore.loadAccounts(),
-      transactionsStore.loadTransactions(),
-      recurrentsStore.loadRecurrents(),
-    ])
+    const results = await Promise.allSettled(sourceLoaders.map(item => item.load()))
+
+    const failed: string[] = []
+    let anySuccess = false
+
+    for (const [index, result] of results.entries()) {
+      if (result.status === 'fulfilled') {
+        anySuccess = true
+        continue
+      }
+      const source = sourceLoaders[index]
+      if (!source) continue
+      failed.push(source.label)
+      console.error(`Erro ao carregar ${source.label}:`, result.reason)
+    }
+
+    loadFailedSources.value = failed
+    if (anySuccess) {
+      hasSuccessfulLoad.value = true
+    }
   } finally {
     loading.value = false
+    refreshing.value = false
   }
+}
+
+onMounted(async () => {
+  await loadPageData()
 })
 </script>
 
@@ -91,6 +140,36 @@ onMounted(async () => {
     </template>
 
     <!-- Conteúdo -->
-    <PendentesList v-else :month="selectedMonth" />
+    <template v-else-if="hasFatalLoadError">
+      <Card class="border-red-500/30 bg-red-500/5">
+        <CardContent class="space-y-3 pt-6">
+          <p class="font-semibold text-red-500">Nao foi possivel carregar pagamentos</p>
+          <p class="text-sm text-muted-foreground">
+            {{ loadErrorMessage || 'Verifique o servidor/API e tente novamente.' }}
+          </p>
+          <Button :disabled="refreshing" @click="loadPageData">
+            {{ refreshing ? 'Tentando novamente...' : 'Tentar novamente' }}
+          </Button>
+        </CardContent>
+      </Card>
+    </template>
+
+    <template v-else>
+      <Card
+        v-if="hasPartialLoadError"
+        class="border-yellow-500/30 bg-yellow-500/5"
+      >
+        <CardContent class="flex flex-col gap-3 pt-6 md:flex-row md:items-center md:justify-between">
+          <p class="text-sm text-muted-foreground">
+            {{ loadErrorMessage }} Alguns dados podem estar incompletos.
+          </p>
+          <Button variant="outline" :disabled="refreshing" @click="loadPageData">
+            {{ refreshing ? 'Atualizando...' : 'Tentar novamente' }}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <PendentesList :month="selectedMonth" />
+    </template>
   </div>
 </template>

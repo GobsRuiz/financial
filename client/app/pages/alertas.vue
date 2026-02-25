@@ -9,14 +9,65 @@ type FilterKey = 'all' | AlertBucket
 
 const { groupedAlerts, counts, loadAlertSources } = useAlerts()
 const loading = ref(true)
+const refreshing = ref(false)
+const loadFailedSources = ref<string[]>([])
+const hasSuccessfulLoad = ref(false)
 const activeFilter = ref<FilterKey>('all')
 
-onMounted(async () => {
+const sourceLoaders = [
+  { label: 'alertas', load: () => loadAlertSources() },
+]
+
+const hasFatalLoadError = computed(() =>
+  loadFailedSources.value.length === sourceLoaders.length && !hasSuccessfulLoad.value,
+)
+
+const hasPartialLoadError = computed(() =>
+  loadFailedSources.value.length > 0 && !hasFatalLoadError.value,
+)
+
+const loadErrorMessage = computed(() => {
+  if (!loadFailedSources.value.length) return ''
+  return `Falha ao carregar: ${loadFailedSources.value.join(', ')}.`
+})
+
+async function loadPageData() {
+  const firstLoad = !hasSuccessfulLoad.value && !refreshing.value
+  if (firstLoad) {
+    loading.value = true
+  } else {
+    refreshing.value = true
+  }
+
   try {
-    await loadAlertSources()
+    const results = await Promise.allSettled(sourceLoaders.map(item => item.load()))
+
+    const failed: string[] = []
+    let anySuccess = false
+
+    for (const [index, result] of results.entries()) {
+      if (result.status === 'fulfilled') {
+        anySuccess = true
+        continue
+      }
+      const source = sourceLoaders[index]
+      if (!source) continue
+      failed.push(source.label)
+      console.error(`Erro ao carregar ${source.label}:`, result.reason)
+    }
+
+    loadFailedSources.value = failed
+    if (anySuccess) {
+      hasSuccessfulLoad.value = true
+    }
   } finally {
     loading.value = false
+    refreshing.value = false
   }
+}
+
+onMounted(async () => {
+  await loadPageData()
 })
 
 const filterOptions = computed(() => [
@@ -134,68 +185,98 @@ function formattedAmount(item: AlertItem): string {
           </div>
         </template>
 
-        <template v-else-if="sections.length === 0">
-          <p class="text-center text-sm text-muted-foreground py-8">
-            {{ emptyMessage }}
-          </p>
-        </template>
-
         <template v-else>
-          <div
-            v-for="section in sections"
-            :key="section.key"
-            class="space-y-3"
-          >
-            <div class="flex items-center gap-2">
-              <Badge variant="outline" :class="section.tone">{{ section.label }}</Badge>
-              <span class="text-xs text-muted-foreground">{{ section.items.length }} alerta{{ section.items.length === 1 ? '' : 's' }}</span>
+          <template v-if="hasFatalLoadError">
+            <div class="space-y-3">
+              <p class="font-semibold text-red-500">Nao foi possivel carregar alertas</p>
+              <p class="text-sm text-muted-foreground">
+                {{ loadErrorMessage || 'Verifique o servidor/API e tente novamente.' }}
+              </p>
+              <Button :disabled="refreshing" @click="loadPageData">
+                {{ refreshing ? 'Tentando novamente...' : 'Tentar novamente' }}
+              </Button>
             </div>
+          </template>
 
-            <div class="space-y-2">
-              <Card
-                v-for="item in section.items"
-                :key="item.id"
-                class="gap-2 border-border/70 bg-gradient-to-br from-card to-card/70 hover:border-border transition-colors"
+          <template v-else>
+            <Card
+              v-if="hasPartialLoadError"
+              class="border-yellow-500/30 bg-yellow-500/5"
+            >
+              <CardContent class="flex flex-col gap-3 pt-4 md:flex-row md:items-center md:justify-between">
+                <p class="text-sm text-muted-foreground">
+                  {{ loadErrorMessage }} Alguns dados podem estar incompletos.
+                </p>
+                <Button variant="outline" :disabled="refreshing" @click="loadPageData">
+                  {{ refreshing ? 'Atualizando...' : 'Tentar novamente' }}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <template v-if="sections.length === 0">
+              <p class="text-center text-sm text-muted-foreground py-8">
+                {{ emptyMessage }}
+              </p>
+            </template>
+
+            <template v-else>
+              <div
+                v-for="section in sections"
+                :key="section.key"
+                class="space-y-3"
               >
-                <CardContent class="px-4 py-3">
-                  <div class="flex items-start gap-3">
-                    <div
-                      class="mt-0.5 h-9 w-9 shrink-0 rounded-full border flex items-center justify-center"
-                      :class="itemVisual(item).iconClass"
-                    >
-                      <component :is="itemVisual(item).icon" class="h-4 w-4" />
-                    </div>
+                <div class="flex items-center gap-2">
+                  <Badge variant="outline" :class="section.tone">{{ section.label }}</Badge>
+                  <span class="text-xs text-muted-foreground">{{ section.items.length }} alerta{{ section.items.length === 1 ? '' : 's' }}</span>
+                </div>
 
-                    <div class="min-w-0 flex-1">
-                      <div class="flex items-start justify-between gap-4">
-                        <div class="min-w-0">
-                          <div class="flex items-center gap-2">
-                            <p class="font-semibold truncate">{{ item.title }}</p>
-                            <Badge variant="outline" class="text-[10px] px-1.5 py-0" :class="itemVisual(item).chipClass">
-                              {{ itemVisual(item).label }}
-                            </Badge>
+                <div class="space-y-2">
+                  <Card
+                    v-for="item in section.items"
+                    :key="item.id"
+                    class="gap-2 border-border/70 bg-gradient-to-br from-card to-card/70 hover:border-border transition-colors"
+                  >
+                    <CardContent class="px-4 py-3">
+                      <div class="flex items-start gap-3">
+                        <div
+                          class="mt-0.5 h-9 w-9 shrink-0 rounded-full border flex items-center justify-center"
+                          :class="itemVisual(item).iconClass"
+                        >
+                          <component :is="itemVisual(item).icon" class="h-4 w-4" />
+                        </div>
+
+                        <div class="min-w-0 flex-1">
+                          <div class="flex items-start justify-between gap-4">
+                            <div class="min-w-0">
+                              <div class="flex items-center gap-2">
+                                <p class="font-semibold truncate">{{ item.title }}</p>
+                                <Badge variant="outline" class="text-[10px] px-1.5 py-0" :class="itemVisual(item).chipClass">
+                                  {{ itemVisual(item).label }}
+                                </Badge>
+                              </div>
+
+                              <p class="text-xs text-muted-foreground truncate mt-0.5">
+                                {{ item.accountLabel }} - {{ item.subtitle }}
+                              </p>
+                            </div>
+
+                            <div class="text-right shrink-0">
+                              <p class="text-xs font-medium" :class="section.tone">{{ urgencyLabel(item) }}</p>
+                              <p class="text-[11px] text-muted-foreground">{{ formatDate(item.targetDate) }}</p>
+                            </div>
                           </div>
 
-                          <p class="text-xs text-muted-foreground truncate mt-0.5">
-                            {{ item.accountLabel }} - {{ item.subtitle }}
+                          <p v-if="item.amountCents" class="mt-2 text-sm font-semibold" :class="amountClass(item)">
+                            {{ formattedAmount(item) }}
                           </p>
                         </div>
-
-                        <div class="text-right shrink-0">
-                          <p class="text-xs font-medium" :class="section.tone">{{ urgencyLabel(item) }}</p>
-                          <p class="text-[11px] text-muted-foreground">{{ formatDate(item.targetDate) }}</p>
-                        </div>
                       </div>
-
-                      <p v-if="item.amountCents" class="mt-2 text-sm font-semibold" :class="amountClass(item)">
-                        {{ formattedAmount(item) }}
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            </template>
+          </template>
         </template>
       </CardContent>
     </Card>
