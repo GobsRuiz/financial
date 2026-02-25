@@ -1,77 +1,91 @@
 <script setup lang="ts">
-import { Check, Filter, ChevronsUpDown, X } from 'lucide-vue-next'
+import {
+  Check,
+  Filter,
+  ChevronsUpDown,
+  X,
+  ChevronDown,
+  ChevronRight,
+  CreditCard,
+  Repeat,
+  Receipt,
+} from 'lucide-vue-next'
 import type { Transaction, Recurrent } from '~/schemas/zod-schemas'
 import { useTransactionsStore } from '~/stores/useTransactions'
 import { useRecurrentsStore } from '~/stores/useRecurrents'
 import { useAccountsStore } from '~/stores/useAccounts'
 import { formatCentsToBRL } from '~/utils/money'
+import { monthKey } from '~/utils/dates'
 
-const props = defineProps<{
-  month: string // "YYYY-MM"
-}>()
+const props = defineProps<{ month: string }>()
+
+type ViewMode = 'open' | 'paid' | 'all'
+type FaturaGroup = {
+  accountId: number
+  accountLabel: string
+  dueDay?: number
+  totalCents: number
+  paidCents: number
+  openCents: number
+  transactions: Transaction[]
+}
 
 const transactionsStore = useTransactionsStore()
 const recurrentsStore = useRecurrentsStore()
 const accountsStore = useAccountsStore()
 
-// Filtros
+const viewMode = ref<ViewMode>('open')
 const filtersOpen = ref(false)
 const filterConta = ref<number | null>(null)
-const filterTipo = ref<'todos' | 'transacao' | 'recorrente'>('todos')
+const filterTipo = ref<'todos' | 'fatura' | 'transacao' | 'recorrente'>('todos')
 
-type PendenteItem = {
-  kind: 'transaction'
-  data: Transaction
-} | {
-  kind: 'recurrent'
-  data: Recurrent
-}
+const expandedFaturas = ref<Set<number>>(new Set())
+const payingId = ref<string | null>(null)
 
-const pendentes = computed<PendenteItem[]>(() => {
-  const items: PendenteItem[] = []
+const actionButtonBaseClass = 'w-[132px] justify-center gap-1.5'
+const paidActionButtonClass = `${actionButtonBaseClass} text-green-500 border-green-500/30 hover:bg-transparent disabled:opacity-100 disabled:cursor-default`
 
-  // Transações não pagas do mês
-  const unpaid = transactionsStore.unpaidForMonth(props.month)
-  for (const tx of unpaid) {
-    items.push({ kind: 'transaction', data: tx })
-  }
+const modeOptions: { label: string, value: ViewMode }[] = [
+  { label: 'Pendentes', value: 'open' },
+  { label: 'Pagos', value: 'paid' },
+  { label: 'Todos', value: 'all' },
+]
 
-  // Recorrentes ativos que ainda não têm transação nesse mês
-  for (const rec of recurrentsStore.recurrents) {
-    if (!rec.active) continue
-    if (transactionsStore.hasRecurrentTransaction(rec.id, props.month)) continue
-    items.push({ kind: 'recurrent', data: rec })
-  }
+const tipoOptions = [
+  { label: 'Todos', value: 'todos' },
+  { label: 'Faturas', value: 'fatura' },
+  { label: 'Transacoes', value: 'transacao' },
+  { label: 'Recorrentes', value: 'recorrente' },
+]
 
+const recurringPending = computed(() => {
+  return recurrentsStore.recurrents.filter((rec) => {
+    if (!rec.active) return false
+    return !transactionsStore.hasRecurrentTransaction(rec.id, props.month)
+  })
+})
+
+const recurringPendingFiltered = computed(() => {
+  if (viewMode.value === 'paid') return [] as Recurrent[]
+  let items = recurringPending.value
+  if (filterConta.value) items = items.filter(rec => rec.accountId === filterConta.value)
   return items
 })
 
-const filteredPendentes = computed(() => {
-  let items = pendentes.value
-
-  if (filterConta.value) {
-    items = items.filter(i => i.data.accountId === filterConta.value)
-  }
-  if (filterTipo.value === 'transacao') {
-    items = items.filter(i => i.kind === 'transaction')
-  } else if (filterTipo.value === 'recorrente') {
-    items = items.filter(i => i.kind === 'recurrent')
-  }
-
-  return items
+const debitTransactionsMonth = computed(() => {
+  return transactionsStore.transactions.filter((tx) =>
+    monthKey(tx.date) === props.month
+    && tx.amount_cents < 0
+    && tx.payment_method !== 'credit'
+    && !tx.recurrentId
+  )
 })
 
-// Totais
-// Saldo: total de receitas do mês (pagas + recorrentes pendentes de receita)
 const saldoCents = computed(() => {
   let total = 0
-  // Receitas já registradas (pagas ou não)
   for (const tx of transactionsStore.transactions) {
-    if (monthKey(tx.date) === props.month && tx.amount_cents > 0) {
-      total += tx.amount_cents
-    }
+    if (monthKey(tx.date) === props.month && tx.amount_cents > 0) total += tx.amount_cents
   }
-  // Recorrentes de receita que ainda não viraram transação
   for (const rec of recurrentsStore.recurrents) {
     if (!rec.active || rec.amount_cents <= 0) continue
     if (transactionsStore.hasRecurrentTransaction(rec.id, props.month)) continue
@@ -80,223 +94,395 @@ const saldoCents = computed(() => {
   return total
 })
 
-// Total pendente: despesas ainda não pagas (transações + recorrentes de despesa sem tx)
-const totalPendenteCents = computed(() => {
-  let total = 0
-  // Transações de despesa não pagas do mês
-  for (const tx of transactionsStore.unpaidForMonth(props.month)) {
-    if (tx.amount_cents < 0) total += Math.abs(tx.amount_cents)
+const invoiceStatus = computed<'all' | 'open' | 'paid'>(() => {
+  if (viewMode.value === 'open') return 'open'
+  if (viewMode.value === 'paid') return 'paid'
+  return 'all'
+})
+
+const faturas = computed<FaturaGroup[]>(() => {
+  const invoiceMap = transactionsStore.creditInvoicesByAccount(props.month, invoiceStatus.value)
+  const groups: FaturaGroup[] = []
+  for (const [accountId, txs] of invoiceMap) {
+    if (filterConta.value && accountId !== filterConta.value) continue
+    const account = accountsStore.accounts.find(a => a.id === accountId)
+    if (!account) continue
+    const transactions = [...txs].sort((a, b) => a.date.localeCompare(b.date))
+    const paidCents = transactions.filter(tx => tx.paid).reduce((s, tx) => s + Math.abs(tx.amount_cents), 0)
+    const openCents = transactions.filter(tx => !tx.paid).reduce((s, tx) => s + Math.abs(tx.amount_cents), 0)
+    groups.push({
+      accountId,
+      accountLabel: account.label,
+      dueDay: account.card_due_day,
+      totalCents: paidCents + openCents,
+      paidCents,
+      openCents,
+      transactions,
+    })
   }
-  // Recorrentes de despesa que ainda não viraram transação
-  for (const rec of recurrentsStore.recurrents) {
-    if (!rec.active || rec.amount_cents >= 0) continue
-    if (transactionsStore.hasRecurrentTransaction(rec.id, props.month)) continue
-    total += Math.abs(rec.amount_cents)
-  }
+  return groups.sort((a, b) => a.accountLabel.localeCompare(b.accountLabel))
+})
+
+const faturasFiltered = computed(() => {
+  return faturas.value
+})
+
+const transacoesDebito = computed(() => {
+  let items = debitTransactionsMonth.value
+  if (filterConta.value) items = items.filter(tx => tx.accountId === filterConta.value)
+  if (viewMode.value === 'open') items = items.filter(tx => !tx.paid)
+  if (viewMode.value === 'paid') items = items.filter(tx => tx.paid)
+  return [...items].sort((a, b) => a.date.localeCompare(b.date))
+})
+
+const showFaturasSection = computed(() => filterTipo.value === 'todos' || filterTipo.value === 'fatura')
+const showTransacoesSection = computed(() => filterTipo.value === 'todos' || filterTipo.value === 'transacao')
+const showRecorrentesSection = computed(() => viewMode.value !== 'paid' && (filterTipo.value === 'todos' || filterTipo.value === 'recorrente'))
+
+const totalOpenCents = computed(() => {
+  let total = faturas.value.reduce((s, fatura) => s + fatura.openCents, 0)
+  total += debitTransactionsMonth.value
+    .filter(tx => !tx.paid)
+    .reduce((s, tx) => s + Math.abs(tx.amount_cents), 0)
+  total += recurringPending.value.filter(rec => rec.amount_cents < 0).reduce((s, rec) => s + Math.abs(rec.amount_cents), 0)
   return total
 })
 
-// Total pago: despesas pagas no mês
-const totalPagoCents = computed(() => {
-  let total = 0
-  for (const tx of transactionsStore.transactions) {
-    if (monthKey(tx.date) === props.month && tx.paid && tx.amount_cents < 0) {
-      total += Math.abs(tx.amount_cents)
-    }
-  }
+const totalPaidCents = computed(() => {
+  let total = faturas.value.reduce((s, fatura) => s + fatura.paidCents, 0)
+  total += debitTransactionsMonth.value
+    .filter(tx => tx.paid)
+    .reduce((s, tx) => s + Math.abs(tx.amount_cents), 0)
   return total
 })
 
-// Ações
-const payingId = ref<string | null>(null)
+const summaryTitle = computed(() => {
+  if (viewMode.value === 'open') return 'Total em Aberto'
+  if (viewMode.value === 'paid') return 'Total Pago'
+  return 'Total do Mes'
+})
 
-async function handlePay(item: PendenteItem) {
-  payingId.value = item.data.id
-  try {
-    if (item.kind === 'transaction') {
-      await transactionsStore.markPaid(item.data.id)
-    } else {
-      await transactionsStore.payRecurrent(item.data as Recurrent, props.month)
-    }
-  } finally {
-    payingId.value = null
-  }
+const summaryClass = computed(() => {
+  if (viewMode.value === 'open') return 'text-yellow-500'
+  if (viewMode.value === 'paid') return 'text-blue-500'
+  return 'text-red-500'
+})
+
+const summaryCents = computed(() => {
+  if (viewMode.value === 'open') return totalOpenCents.value
+  if (viewMode.value === 'paid') return totalPaidCents.value
+  return totalOpenCents.value + totalPaidCents.value
+})
+
+const summaryCount = computed(() => {
+  let count = 0
+  if (showFaturasSection.value) count += faturasFiltered.value.length
+  if (showTransacoesSection.value) count += transacoesDebito.value.length
+  if (showRecorrentesSection.value) count += recurringPendingFiltered.value.length
+  return count
+})
+
+const hasActiveFilters = computed(() => filterConta.value !== null || filterTipo.value !== 'todos')
+
+const hasAnyResult = computed(() => {
+  return (
+    (showFaturasSection.value && faturasFiltered.value.length > 0)
+    || (showTransacoesSection.value && transacoesDebito.value.length > 0)
+    || (showRecorrentesSection.value && recurringPendingFiltered.value.length > 0)
+  )
+})
+
+const emptyMessage = computed(() => {
+  if (viewMode.value === 'open') return 'Nenhum item pendente encontrado para este mes.'
+  if (viewMode.value === 'paid') return 'Nenhum item pago encontrado para este mes.'
+  return 'Nenhum item encontrado para este mes.'
+})
+
+function toggleFatura(accountId: number) {
+  const next = new Set(expandedFaturas.value)
+  if (next.has(accountId)) next.delete(accountId)
+  else next.add(accountId)
+  expandedFaturas.value = next
 }
 
 function getAccountLabel(accountId: number) {
-  return accountsStore.accounts.find(a => a.id === accountId)?.label ?? '—'
+  return accountsStore.accounts.find(a => a.id === accountId)?.label ?? '-'
 }
 
-function getItemLabel(item: PendenteItem): string {
-  if (item.kind === 'recurrent') {
-    return (item.data as Recurrent).name
-  }
-  const tx = item.data as Transaction
-  if (tx.installment) {
-    return `${tx.installment.product} (${tx.installment.index}/${tx.installment.total})`
-  }
-  return tx.description || tx.category
+function getTxLabel(tx: Transaction): string {
+  if (tx.installment) return `${tx.installment.product} (${tx.installment.index}/${tx.installment.total})`
+  return tx.description || 'Transacao'
 }
 
-function getItemDate(item: PendenteItem): string {
-  if (item.kind === 'transaction') return (item.data as Transaction).date
-  const rec = item.data as Recurrent
-  if (rec.day_of_month) return `Dia ${rec.day_of_month}`
-  return '—'
+function getFaturaVisibleTransactions(fatura: FaturaGroup) {
+  if (viewMode.value === 'open') return fatura.transactions.filter(tx => !tx.paid)
+  if (viewMode.value === 'paid') return fatura.transactions.filter(tx => tx.paid)
+  return fatura.transactions
 }
 
-// Filtros helpers
-const tipoOptions = [
-  { label: 'Todos', value: 'todos' },
-  { label: 'Transação', value: 'transacao' },
-  { label: 'Recorrente', value: 'recorrente' },
-]
+function getFaturaActionLabel(fatura: FaturaGroup) {
+  if (payingId.value === `fatura-${fatura.accountId}`) return 'Pagando...'
+  if (fatura.openCents === 0) return 'Pago'
+  if (viewMode.value === 'open') return 'Pagar Fatura'
+  return 'Pagar Aberto'
+}
 
-const hasActiveFilters = computed(() =>
-  filterConta.value !== null || filterTipo.value !== 'todos'
-)
+function getRecurrentLabel(rec: Recurrent, loading: boolean) {
+  if (rec.kind === 'income') return loading ? 'Recebendo...' : 'Receber'
+  if ((rec.payment_method ?? 'debit') === 'credit') return loading ? 'Lancando...' : 'Lancar'
+  return loading ? 'Pagando...' : 'Pagar'
+}
 
 function clearFilters() {
   filterConta.value = null
   filterTipo.value = 'todos'
 }
 
-// Import monthKey for use in computed
-import { monthKey } from '~/utils/dates'
+async function payFatura(fatura: FaturaGroup) {
+  const openTransactions = fatura.transactions.filter(tx => !tx.paid)
+  if (!openTransactions.length) return
+  payingId.value = `fatura-${fatura.accountId}`
+  try {
+    for (const tx of openTransactions) await transactionsStore.markPaid(tx.id)
+  } finally {
+    payingId.value = null
+  }
+}
+
+async function payTransaction(tx: Transaction) {
+  payingId.value = tx.id
+  try {
+    await transactionsStore.markPaid(tx.id)
+  } finally {
+    payingId.value = null
+  }
+}
+
+async function payRecurrent(rec: Recurrent) {
+  payingId.value = rec.id
+  try {
+    await transactionsStore.payRecurrent(rec, props.month)
+  } finally {
+    payingId.value = null
+  }
+}
 </script>
 
 <template>
   <div class="space-y-4">
-    <!-- Cards resumo -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <Card>
         <CardContent class="pt-6">
           <p class="text-sm text-muted-foreground">Saldo</p>
-          <p class="text-2xl font-bold text-green-500">
-            {{ formatCentsToBRL(saldoCents) }}
-          </p>
-          <p class="text-xs text-muted-foreground mt-1">total recebido / a receber no mês</p>
+          <p class="text-2xl font-bold text-green-500">{{ formatCentsToBRL(saldoCents) }}</p>
+          <p class="text-xs text-muted-foreground mt-1">total recebido / a receber no mes</p>
         </CardContent>
       </Card>
       <Card>
         <CardContent class="pt-6">
-          <p class="text-sm text-muted-foreground">Total Pendente</p>
-          <p class="text-2xl font-bold text-yellow-500">
-            {{ formatCentsToBRL(totalPendenteCents) }}
-          </p>
-          <p class="text-xs text-muted-foreground mt-1">
-            {{ filteredPendentes.length }} {{ filteredPendentes.length === 1 ? 'item' : 'itens' }} a pagar
-          </p>
+          <p class="text-sm text-muted-foreground">{{ summaryTitle }}</p>
+          <p class="text-2xl font-bold" :class="summaryClass">{{ formatCentsToBRL(summaryCents) }}</p>
+          <p class="text-xs text-muted-foreground mt-1">resumo do modo selecionado</p>
         </CardContent>
       </Card>
       <Card>
         <CardContent class="pt-6">
-          <p class="text-sm text-muted-foreground">Total Pago</p>
-          <p class="text-2xl font-bold text-blue-500">
-            {{ formatCentsToBRL(totalPagoCents) }}
-          </p>
-          <p class="text-xs text-muted-foreground mt-1">contas pagas no mês</p>
+          <p class="text-sm text-muted-foreground">Itens no Modo</p>
+          <p class="text-2xl font-bold">{{ summaryCount }}</p>
+          <p class="text-xs text-muted-foreground mt-1">faturas, transacoes e recorrentes</p>
         </CardContent>
       </Card>
     </div>
 
-    <!-- Lista -->
     <Card>
       <CardContent class="pt-6 space-y-4">
-        <!-- Filtros -->
+        <div class="flex flex-wrap items-center gap-2">
+          <Button
+            v-for="opt in modeOptions"
+            :key="opt.value"
+            size="sm"
+            :variant="viewMode === opt.value ? 'secondary' : 'outline'"
+            @click="viewMode = opt.value"
+          >
+            {{ opt.label }}
+          </Button>
+        </div>
+
         <Collapsible v-model:open="filtersOpen">
           <CollapsibleTrigger as-child>
             <Button variant="ghost" size="sm" class="flex items-center gap-2 w-full justify-between">
-              <span class="flex items-center gap-2">
-                <Filter class="h-4 w-4" />
-                Filtros
-              </span>
+              <span class="flex items-center gap-2"><Filter class="h-4 w-4" />Filtros</span>
               <ChevronsUpDown class="h-4 w-4" />
             </Button>
           </CollapsibleTrigger>
           <CollapsibleContent class="pt-3">
             <div class="grid grid-cols-2 gap-3">
               <Select v-model="filterConta">
-                <SelectTrigger>
-                  <SelectValue placeholder="Conta" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Conta" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem :value="null">Todas</SelectItem>
-                  <SelectItem v-for="acc in accountsStore.accounts" :key="acc.id" :value="acc.id">
-                    {{ acc.label }}
-                  </SelectItem>
+                  <SelectItem v-for="acc in accountsStore.accounts" :key="acc.id" :value="acc.id">{{ acc.label }}</SelectItem>
                 </SelectContent>
               </Select>
-
               <Select v-model="filterTipo">
-                <SelectTrigger>
-                  <SelectValue placeholder="Tipo" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Tipo" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem v-for="opt in tipoOptions" :key="opt.value" :value="opt.value">
-                    {{ opt.label }}
-                  </SelectItem>
+                  <SelectItem v-for="opt in tipoOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <Button
-              v-if="hasActiveFilters"
-              variant="ghost"
-              size="sm"
-              class="gap-2 mt-2 ml-auto"
-              @click="clearFilters"
-            >
-              <X class="h-4 w-4" />
-              Limpar filtros
+            <Button v-if="hasActiveFilters" variant="ghost" size="sm" class="gap-2 mt-2 ml-auto" @click="clearFilters">
+              <X class="h-4 w-4" />Limpar filtros
             </Button>
           </CollapsibleContent>
         </Collapsible>
 
         <Separator />
 
-        <!-- Tabela -->
-        <Table v-if="filteredPendentes.length">
-          <TableHeader>
-            <TableRow>
-              <TableHead>Descrição</TableHead>
-              <TableHead>Tipo</TableHead>
-              <TableHead>Conta</TableHead>
-              <TableHead>Data/Dia</TableHead>
-              <TableHead class="text-right">Valor</TableHead>
-              <TableHead class="text-right">Ação</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableRow v-for="item in filteredPendentes" :key="item.data.id">
-              <TableCell>{{ getItemLabel(item) }}</TableCell>
-              <TableCell>
-                <Badge variant="secondary">
-                  {{ item.kind === 'recurrent' ? 'Recorrente' : 'Transação' }}
-                </Badge>
-              </TableCell>
-              <TableCell>{{ getAccountLabel(item.data.accountId) }}</TableCell>
-              <TableCell>{{ getItemDate(item) }}</TableCell>
-              <TableCell class="text-right" :class="item.data.amount_cents < 0 ? 'text-red-500' : 'text-green-500'">
-                {{ formatCentsToBRL(Math.abs(item.data.amount_cents)) }}
-              </TableCell>
-              <TableCell class="text-right">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  class="gap-1.5"
-                  :disabled="payingId === item.data.id"
-                  @click="handlePay(item)"
-                >
-                  <Check class="h-3.5 w-3.5" />
-                  {{ payingId === item.data.id ? 'Pagando...' : 'Pagar' }}
-                </Button>
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
-        <p v-else class="text-center text-muted-foreground py-8">
-          Nenhum pendente encontrado para este mês.
-        </p>
+        <div v-if="showFaturasSection && faturasFiltered.length" class="space-y-2">
+          <div class="flex items-center gap-2 text-sm font-medium text-muted-foreground"><CreditCard class="h-4 w-4" />Faturas do Cartao</div>
+          <Table class="table-fixed">
+            <TableHeader>
+              <TableRow>
+                <TableHead class="w-6"></TableHead>
+                <TableHead class="w-[23%]">Fatura</TableHead>
+                <TableHead class="w-[12%]">Venc.</TableHead>
+                <TableHead class="w-[12%]">Itens</TableHead>
+                <TableHead class="w-[14%] text-right">Total</TableHead>
+                <TableHead class="w-[14%] text-right">Pago</TableHead>
+                <TableHead class="w-[14%] text-right">Aberto</TableHead>
+                <TableHead class="w-[160px] text-right">Acao</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <template v-for="fatura in faturasFiltered" :key="fatura.accountId">
+                <TableRow class="cursor-pointer" @click="toggleFatura(fatura.accountId)">
+                  <TableCell>
+                    <button type="button" class="text-muted-foreground" @click.stop="toggleFatura(fatura.accountId)">
+                      <ChevronDown v-if="expandedFaturas.has(fatura.accountId)" class="h-4 w-4" />
+                      <ChevronRight v-else class="h-4 w-4" />
+                    </button>
+                  </TableCell>
+                  <TableCell class="font-medium truncate">Fatura {{ fatura.accountLabel }}</TableCell>
+                  <TableCell>{{ fatura.dueDay ? `Dia ${fatura.dueDay}` : '-' }}</TableCell>
+                  <TableCell><Badge variant="secondary" class="text-xs">{{ getFaturaVisibleTransactions(fatura).length }} compras</Badge></TableCell>
+                  <TableCell class="text-right text-red-500">{{ formatCentsToBRL(fatura.totalCents) }}</TableCell>
+                  <TableCell class="text-right text-blue-500">{{ formatCentsToBRL(fatura.paidCents) }}</TableCell>
+                  <TableCell class="text-right text-yellow-500">{{ formatCentsToBRL(fatura.openCents) }}</TableCell>
+                  <TableCell class="text-right">
+                    <Button
+                      v-if="fatura.openCents === 0"
+                      size="sm"
+                      variant="outline"
+                      :class="paidActionButtonClass"
+                      disabled
+                    ><Check class="h-3.5 w-3.5" />Pago</Button>
+                    <Button
+                      v-else
+                      size="sm"
+                      variant="outline"
+                      :class="actionButtonBaseClass"
+                      :disabled="payingId === `fatura-${fatura.accountId}`"
+                      @click.stop="payFatura(fatura)"
+                    ><Check class="h-3.5 w-3.5" />{{ getFaturaActionLabel(fatura) }}</Button>
+                  </TableCell>
+                </TableRow>
+                <TableRow v-if="expandedFaturas.has(fatura.accountId)" :key="`${fatura.accountId}-expand`">
+                  <TableCell colspan="8" class="p-0 pt-0 pb-2">
+                    <div class="space-y-1 pl-4 border-l-2 border-border ml-2">
+                      <div v-for="tx in getFaturaVisibleTransactions(fatura)" :key="tx.id" class="flex items-center justify-between py-1.5 px-3 rounded text-sm hover:bg-muted/30">
+                        <div class="flex items-center gap-3">
+                          <span>{{ getTxLabel(tx) }}</span>
+                          <span class="text-muted-foreground text-xs">{{ tx.date }}</span>
+                          <Badge
+                            v-if="viewMode === 'all' && tx.paid"
+                            variant="outline"
+                            class="text-green-500 border-green-500/30"
+                          >
+                            Pago
+                          </Badge>
+                        </div>
+                        <span class="text-red-500">{{ formatCentsToBRL(Math.abs(tx.amount_cents)) }}</span>
+                      </div>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              </template>
+            </TableBody>
+          </Table>
+        </div>
+
+        <template v-if="showTransacoesSection && transacoesDebito.length">
+          <Separator v-if="showFaturasSection && faturasFiltered.length" />
+          <div class="space-y-2">
+            <div class="flex items-center gap-2 text-sm font-medium text-muted-foreground"><Receipt class="h-4 w-4" />Transacoes Avulsas</div>
+            <Table class="table-fixed">
+              <TableHeader>
+                <TableRow>
+                  <TableHead class="w-[34%]">Descricao</TableHead>
+                  <TableHead class="w-[16%]">Conta</TableHead>
+                  <TableHead class="w-[14%]">Data</TableHead>
+                  <TableHead class="w-[14%] text-right">Valor</TableHead>
+                  <TableHead class="w-[160px] text-right">Acao</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow v-for="tx in transacoesDebito" :key="tx.id" :class="{ 'opacity-60': tx.paid }">
+                  <TableCell class="font-medium truncate">
+                    <div class="flex items-center gap-2">
+                      <span>{{ getTxLabel(tx) }}</span>
+                      <Badge
+                        v-if="viewMode === 'all' && tx.paid"
+                        variant="outline"
+                        class="text-green-500 border-green-500/30"
+                      >
+                        Pago
+                      </Badge>
+                    </div>
+                  </TableCell>
+                  <TableCell>{{ getAccountLabel(tx.accountId) }}</TableCell>
+                  <TableCell>{{ tx.date }}</TableCell>
+                  <TableCell class="text-right text-red-500">{{ formatCentsToBRL(Math.abs(tx.amount_cents)) }}</TableCell>
+                  <TableCell class="text-right">
+                    <Button v-if="tx.paid" size="sm" variant="outline" :class="paidActionButtonClass" disabled><Check class="h-3.5 w-3.5" />Pago</Button>
+                    <Button v-else size="sm" variant="outline" :class="actionButtonBaseClass" :disabled="payingId === tx.id" @click.stop="payTransaction(tx)"><Check class="h-3.5 w-3.5" />{{ payingId === tx.id ? 'Pagando...' : 'Pagar' }}</Button>
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
+        </template>
+
+        <template v-if="showRecorrentesSection && recurringPendingFiltered.length">
+          <Separator v-if="(showFaturasSection && faturasFiltered.length) || (showTransacoesSection && transacoesDebito.length)" />
+          <div class="space-y-2">
+            <div class="flex items-center gap-2 text-sm font-medium text-muted-foreground"><Repeat class="h-4 w-4" />Recorrentes a Lancar</div>
+            <Table class="table-fixed">
+              <TableHeader>
+                <TableRow>
+                  <TableHead class="w-[34%]">Descricao</TableHead>
+                  <TableHead class="w-[16%]">Conta</TableHead>
+                  <TableHead class="w-[14%]">Dia</TableHead>
+                  <TableHead class="w-[14%] text-right">Valor</TableHead>
+                  <TableHead class="w-[160px] text-right">Acao</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow v-for="rec in recurringPendingFiltered" :key="rec.id">
+                  <TableCell class="font-medium truncate">{{ rec.name }}</TableCell>
+                  <TableCell>{{ getAccountLabel(rec.accountId) }}</TableCell>
+                  <TableCell>{{ (rec.due_day ?? rec.day_of_month) ? `Dia ${rec.due_day ?? rec.day_of_month}` : '-' }}</TableCell>
+                  <TableCell class="text-right" :class="rec.amount_cents < 0 ? 'text-red-500' : 'text-green-500'">{{ formatCentsToBRL(Math.abs(rec.amount_cents)) }}</TableCell>
+                  <TableCell class="text-right">
+                    <Button size="sm" variant="outline" :class="actionButtonBaseClass" :disabled="payingId === rec.id" @click.stop="payRecurrent(rec)"><Check class="h-3.5 w-3.5" />{{ getRecurrentLabel(rec, payingId === rec.id) }}</Button>
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
+        </template>
+
+        <p v-if="!hasAnyResult" class="text-center text-muted-foreground py-8">{{ emptyMessage }}</p>
       </CardContent>
     </Card>
   </div>

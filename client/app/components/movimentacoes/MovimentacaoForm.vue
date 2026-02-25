@@ -1,35 +1,34 @@
 <script setup lang="ts">
-import { AlertCircleIcon, Save } from 'lucide-vue-next'
+import { Save } from 'lucide-vue-next'
 import type { Transaction, Recurrent } from '~/schemas/zod-schemas'
 import { useAccountsStore } from '~/stores/useAccounts'
-import { useTagsStore } from '~/stores/useTags'
 import { useTransactionsStore } from '~/stores/useTransactions'
 import { useRecurrentsStore } from '~/stores/useRecurrents'
 import { useInvestmentPositionsStore } from '~/stores/useInvestmentPositions'
 import { useInvestmentEventsStore } from '~/stores/useInvestmentEvents'
+import { useAppToast } from '~/composables/useAppToast'
 import { parseBRLToCents, formatCentsToBRL } from '~/utils/money'
 import { nowISO } from '~/utils/dates'
-import { Alert, AlertDescription } from '../ui/alert'
 
 const props = defineProps<{
   editTransaction?: Transaction | null
   editRecurrent?: Recurrent | null
+  defaultType?: 'transacao' | 'recorrente' | 'investimento'
 }>()
 
 const emit = defineEmits<{ saved: [] }>()
 
 const accountsStore = useAccountsStore()
-const tagsStore = useTagsStore()
 const transactionsStore = useTransactionsStore()
 const recurrentsStore = useRecurrentsStore()
 const positionsStore = useInvestmentPositionsStore()
 const eventsStore = useInvestmentEventsStore()
+const appToast = useAppToast()
 
 const isEdit = computed(() => !!props.editTransaction || !!props.editRecurrent)
 
 const tipoMovimentacao = ref<'transacao' | 'recorrente' | 'investimento'>('transacao')
 const loading = ref(false)
-const error = ref('')
 
 function centsToBRLDisplay(cents: number): string {
   return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(cents) / 100)
@@ -37,14 +36,12 @@ function centsToBRLDisplay(cents: number): string {
 
 // ── Form Transação ──
 const txForm = reactive({
-  accountId: null as number | null,
   type: 'expense' as 'expense' | 'income' | 'transfer',
-  category: '',
+  payment_method: 'credit' as 'debit' | 'credit',
+  accountId: null as number | null,
   amount: '',
   date: nowISO(),
   description: '',
-  tags: [] as string[],
-  paid: false,
   parcelado: false,
   totalParcelas: '',
   produto: '',
@@ -54,7 +51,9 @@ const txForm = reactive({
 // ── Form Recorrente ──
 const recForm = reactive({
   accountId: null as number | null,
-  kind: 'expense' as 'income' | 'expense' | 'benefit',
+  kind: 'expense' as 'income' | 'expense',
+  payment_method: 'debit' as 'debit' | 'credit',
+  notify: false,
   name: '',
   amount: '',
   frequency: 'monthly' as const,
@@ -63,6 +62,9 @@ const recForm = reactive({
   description: '',
   active: true,
 })
+const showRecNotify = computed(() =>
+  recForm.kind === 'expense' && recForm.payment_method === 'debit'
+)
 
 // ── Form Investimento (lançamento) ──
 const invForm = reactive({
@@ -94,12 +96,24 @@ const eventTypeOptionsFixed = [
 ] as const
 
 const eventTypeOptions = computed(() =>
-  selectedPosition.value?.bucket === 'fixed' ? eventTypeOptionsFixed : eventTypeOptionsVariable,
+  {
+    const position = selectedPosition.value
+    if (position?.bucket === 'fixed') {
+      if (position.investment_type === 'caixinha') {
+        return eventTypeOptionsFixed.filter(opt => opt.value !== 'maturity')
+      }
+      return eventTypeOptionsFixed
+    }
+    return eventTypeOptionsVariable
+  },
 )
 
 const investmentPositions = computed(() => {
   return positionsStore.positions
 })
+
+// Todas as contas sempre disponíveis
+const availableAccounts = computed(() => accountsStore.accounts)
 
 watch(() => invForm.positionId, () => {
   invForm.event_type = selectedPosition.value?.bucket === 'fixed' ? 'contribution' : 'buy'
@@ -119,6 +133,64 @@ watch(() => [invForm.quantity, invForm.unit_price], () => {
   invForm.amount = formatCentsToBRL(Math.round(qty * cents))
 })
 
+// Resetar campos ao trocar tipo
+watch(() => txForm.type, () => {
+  if (txForm.type === 'income') {
+    txForm.payment_method = 'credit'
+    txForm.parcelado = false
+    txForm.totalParcelas = ''
+    txForm.produto = ''
+    txForm.valorParcela = ''
+  }
+  if (txForm.type === 'expense') {
+    txForm.payment_method = 'credit'
+  }
+  if (txForm.type === 'transfer') {
+    txForm.payment_method = 'debit'
+    txForm.parcelado = false
+    txForm.totalParcelas = ''
+    txForm.produto = ''
+    txForm.valorParcela = ''
+  }
+})
+
+watch(() => recForm.kind, (kind) => {
+  if (kind !== 'expense') {
+    recForm.payment_method = 'debit'
+    recForm.due_day = ''
+    return
+  }
+
+  recForm.day_of_month = ''
+})
+
+watch(() => recForm.payment_method, (method) => {
+  if (method === 'credit') {
+    recForm.due_day = ''
+  }
+})
+
+watch(() => [recForm.kind, recForm.payment_method], () => {
+  if (!showRecNotify.value) {
+    recForm.notify = false
+  }
+  if (recForm.kind !== 'expense' || recForm.payment_method !== 'credit') return
+  const account = accountsStore.accounts.find(a => a.id === recForm.accountId)
+  if (account && !account.card_closing_day && !account.card_due_day) {
+    recForm.accountId = null
+  }
+})
+
+// Resetar conta ao trocar método (pode ter ficado conta sem cartão)
+watch(() => txForm.payment_method, () => {
+  if (txForm.payment_method === 'credit') {
+    const account = accountsStore.accounts.find(a => a.id === txForm.accountId)
+    if (account && !account.card_closing_day) {
+      txForm.accountId = null
+    }
+  }
+})
+
 // Auto-calcular valor da parcela quando valor total ou nº de parcelas mudar
 watch(() => [txForm.amount, txForm.totalParcelas], () => {
   if (!txForm.parcelado || !txForm.amount || !txForm.totalParcelas) return
@@ -133,17 +205,16 @@ watch(() => [txForm.amount, txForm.totalParcelas], () => {
 watch(() => props.editTransaction, (tx) => {
   if (tx) {
     tipoMovimentacao.value = 'transacao'
-    txForm.accountId = tx.accountId
     txForm.type = tx.type
-    txForm.category = tx.category
+    txForm.payment_method = tx.payment_method ?? 'credit'
+    txForm.accountId = tx.accountId
     txForm.amount = centsToBRLDisplay(tx.amount_cents)
     txForm.date = tx.date
     txForm.description = tx.description ?? ''
-    txForm.tags = tx.tags ?? []
-    txForm.paid = tx.paid
     txForm.parcelado = false
     txForm.totalParcelas = ''
     txForm.produto = ''
+    txForm.valorParcela = ''
   }
 }, { immediate: true })
 
@@ -152,6 +223,8 @@ watch(() => props.editRecurrent, (rec) => {
     tipoMovimentacao.value = 'recorrente'
     recForm.accountId = rec.accountId
     recForm.kind = rec.kind
+    recForm.payment_method = rec.payment_method ?? 'debit'
+    recForm.notify = rec.notify ?? false
     recForm.name = rec.name
     recForm.amount = centsToBRLDisplay(rec.amount_cents)
     recForm.day_of_month = rec.day_of_month?.toString() ?? ''
@@ -161,14 +234,20 @@ watch(() => props.editRecurrent, (rec) => {
   }
 }, { immediate: true })
 
+watch(() => props.defaultType, (type) => {
+  if (!type || isEdit.value) return
+  tipoMovimentacao.value = type
+}, { immediate: true })
+
 function resetForms() {
   Object.assign(txForm, {
-    accountId: null, type: 'expense', category: '', amount: '', date: nowISO(),
-    description: '', tags: [], paid: false, parcelado: false, totalParcelas: '', produto: '', valorParcela: '',
+    type: 'expense', payment_method: 'credit', accountId: null,
+    amount: '', date: nowISO(),
+    description: '', parcelado: false, totalParcelas: '', produto: '', valorParcela: '',
   })
   Object.assign(recForm, {
-    accountId: null, kind: 'expense', name: '', amount: '', frequency: 'monthly',
-    day_of_month: '', due_day: '', description: '', active: true,
+    accountId: null, kind: 'expense', payment_method: 'debit', name: '', amount: '', frequency: 'monthly',
+    notify: false, day_of_month: '', due_day: '', description: '', active: true,
   })
   Object.assign(invForm, {
     positionId: '',
@@ -180,25 +259,37 @@ function resetForms() {
     fees: '',
     note: '',
   })
-  error.value = ''
 }
 
 async function handleSubmit() {
   loading.value = true
-  error.value = ''
 
   try {
     if (tipoMovimentacao.value === 'transacao') {
       await submitTransacao()
+      appToast.success({
+        title: isEdit.value ? 'Transação atualizada' : (txForm.parcelado ? 'Parcelas geradas' : 'Transação salva'),
+      })
     } else if (tipoMovimentacao.value === 'recorrente') {
       await submitRecorrente()
+      appToast.success({
+        title: isEdit.value ? 'Recorrente atualizada' : 'Recorrente criada',
+      })
     } else {
       await submitInvestimento()
+      appToast.success({ title: 'Lançamento registrado' })
     }
     resetForms()
     emit('saved')
   } catch (e: any) {
-    error.value = e.message || 'Erro ao salvar'
+    const description = e?.message || 'Ocorreu um erro ao salvar os dados.'
+    const title = tipoMovimentacao.value === 'investimento'
+      ? 'Erro ao registrar lançamento'
+      : tipoMovimentacao.value === 'recorrente'
+        ? 'Erro ao salvar recorrente'
+        : 'Erro ao salvar transação'
+
+    appToast.error({ title, description })
   } finally {
     loading.value = false
   }
@@ -206,27 +297,23 @@ async function handleSubmit() {
 
 async function submitTransacao() {
   if (!txForm.accountId) throw new Error('Selecione uma conta')
-  if (!txForm.category) throw new Error('Informe a categoria')
   if (!txForm.amount) throw new Error('Informe o valor')
   if (!txForm.date) throw new Error('Informe a data')
 
   const cents = parseBRLToCents(txForm.amount)
   const amount_cents = txForm.type === 'expense' ? -cents : cents
-
-  for (const tag of txForm.tags) {
-    await tagsStore.ensureTag(tag)
-  }
+  const payment_method = txForm.type === 'income' ? undefined : txForm.payment_method
 
   if (props.editTransaction) {
+    const paid = transactionsStore.derivePaid(txForm.type, payment_method)
     await transactionsStore.updateTransaction(props.editTransaction.id, {
       accountId: txForm.accountId,
       date: txForm.date,
       type: txForm.type,
-      category: txForm.category,
+      payment_method,
       amount_cents,
       description: txForm.description || undefined,
-      tags: txForm.tags.length ? txForm.tags : undefined,
-      paid: txForm.paid,
+      paid,
     })
   } else if (txForm.parcelado) {
     const total = parseInt(txForm.totalParcelas)
@@ -241,67 +328,91 @@ async function submitTransacao() {
       accountId: txForm.accountId,
       date: txForm.date,
       type: txForm.type,
-      category: txForm.category,
-      amount_cents,
+      payment_method,
       installmentAmountCents,
       description: txForm.description || undefined,
-      tags: txForm.tags.length ? txForm.tags : undefined,
-      paid: txForm.paid,
       product: txForm.produto,
       totalInstallments: total,
     })
   } else {
-    await transactionsStore.addTransaction({
+    const tx = await transactionsStore.addTransaction({
       accountId: txForm.accountId,
       date: txForm.date,
       type: txForm.type,
-      category: txForm.category,
+      payment_method,
       amount_cents,
       description: txForm.description || undefined,
-      tags: txForm.tags.length ? txForm.tags : undefined,
-      paid: txForm.paid,
+      paid: transactionsStore.derivePaid(txForm.type, payment_method),
       installment: null,
     })
 
-    if (txForm.paid) {
+    // Ajustar saldo somente se pago (débito/income/transfer)
+    if (tx.paid) {
       await accountsStore.adjustBalance(
         txForm.accountId,
         amount_cents,
-        txForm.description || txForm.category,
+        txForm.description || 'Transacao',
       )
     }
   }
 }
 
 async function submitRecorrente() {
-  if (!recForm.accountId) throw new Error('Selecione uma conta')
   if (!recForm.name) throw new Error('Informe o nome')
   if (!recForm.amount) throw new Error('Informe o valor')
 
+  const requiresAccountSelection = recForm.kind !== 'expense' || recForm.payment_method === 'credit'
+  if (!recForm.accountId) {
+    if (requiresAccountSelection) throw new Error('Selecione uma conta')
+    recForm.accountId = accountsStore.accounts[0]?.id ?? null
+  }
+  if (!recForm.accountId) throw new Error('Cadastre uma conta primeiro')
+
+  if (recForm.kind === 'expense' && recForm.payment_method === 'credit') {
+    const account = accountsStore.accounts.find(a => a.id === recForm.accountId)
+    if (!account || (!account.card_closing_day && !account.card_due_day)) {
+      throw new Error('Selecione uma conta com cartao configurado')
+    }
+  }
+
+  const accountId = recForm.accountId
   const cents = parseBRLToCents(recForm.amount)
   const amount_cents = recForm.kind === 'expense' ? -cents : cents
+  const payment_method = recForm.kind === 'expense' ? recForm.payment_method : undefined
+  const due_day =
+    recForm.kind === 'expense' && recForm.payment_method === 'debit' && recForm.due_day
+      ? parseInt(recForm.due_day)
+      : undefined
+  const day_of_month =
+    recForm.kind === 'income' && recForm.day_of_month
+      ? parseInt(recForm.day_of_month)
+      : undefined
 
   if (props.editRecurrent) {
     await recurrentsStore.updateRecurrent(props.editRecurrent.id, {
-      accountId: recForm.accountId,
+      accountId,
       kind: recForm.kind,
+      payment_method,
+      notify: showRecNotify.value ? recForm.notify : false,
       name: recForm.name,
       amount_cents,
       frequency: recForm.frequency,
-      day_of_month: recForm.day_of_month ? parseInt(recForm.day_of_month) : undefined,
-      due_day: recForm.due_day ? parseInt(recForm.due_day) : undefined,
+      day_of_month,
+      due_day,
       description: recForm.description || undefined,
       active: recForm.active,
     })
   } else {
     await recurrentsStore.addRecurrent({
-      accountId: recForm.accountId,
+      accountId,
       kind: recForm.kind,
+      payment_method,
+      notify: showRecNotify.value ? recForm.notify : false,
       name: recForm.name,
       amount_cents,
       frequency: recForm.frequency,
-      day_of_month: recForm.day_of_month ? parseInt(recForm.day_of_month) : undefined,
-      due_day: recForm.due_day ? parseInt(recForm.due_day) : undefined,
+      day_of_month,
+      due_day,
       description: recForm.description || undefined,
       active: recForm.active,
     })
@@ -315,6 +426,10 @@ async function submitInvestimento() {
 
   const position = selectedPosition.value
   if (!position) throw new Error('Posição inválida')
+
+  if (position.investment_type === 'caixinha' && invForm.event_type === 'maturity') {
+    throw new Error('Evento vencimento nao esta disponivel para caixinha')
+  }
 
   if (position.bucket === 'variable' && (invForm.event_type === 'buy' || invForm.event_type === 'sell')) {
     const qty = Number(invForm.quantity.replace(',', '.'))
@@ -340,34 +455,34 @@ const txTypeOptions = [
   { label: 'Transferência', value: 'transfer' },
 ]
 
+const methodOptions = [
+  { label: 'Débito', value: 'debit' },
+  { label: 'Crédito', value: 'credit' },
+]
+
 const kindOptions = [
   { label: 'Despesa', value: 'expense' },
   { label: 'Receita', value: 'income' },
-  { label: 'Benefício', value: 'benefit' },
+]
+
+const recPaymentMethodOptions = [
+  { label: 'Boleto (avista)', value: 'debit' },
+  { label: 'Cartao/Conta (fatura)', value: 'credit' },
 ]
 </script>
 
 <template>
-  <Tabs :default-value="tipoMovimentacao" class="space-y-4">
+  <Tabs v-model="tipoMovimentacao" class="space-y-4">
     <form @submit.prevent="handleSubmit" class="space-y-4">
       <TabsList class="w-full" v-if="!isEdit">
-        <TabsTrigger value="transacao" class="flex-1" @click="tipoMovimentacao = 'transacao'">Transação</TabsTrigger>
-        <TabsTrigger value="recorrente" class="flex-1" @click="tipoMovimentacao = 'recorrente'">Recorrente</TabsTrigger>
-        <TabsTrigger value="investimento" class="flex-1" @click="tipoMovimentacao = 'investimento'">Investimento</TabsTrigger>
+        <TabsTrigger value="transacao" class="flex-1">Transação</TabsTrigger>
+        <TabsTrigger value="recorrente" class="flex-1">Recorrente</TabsTrigger>
+        <TabsTrigger value="investimento" class="flex-1">Investimento</TabsTrigger>
       </TabsList>
 
       <template v-if="tipoMovimentacao === 'transacao'">
         <div class="grid grid-cols-2 gap-4">
-          <div class="space-y-2">
-            <Label>Conta *</Label>
-            <Select v-model="txForm.accountId">
-              <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="acc in accountsStore.accounts" :key="acc.id" :value="acc.id">{{ acc.label }}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
+          <!-- Tipo (primeiro) -->
           <div class="space-y-2">
             <Label>Tipo *</Label>
             <Select v-model="txForm.type">
@@ -378,10 +493,28 @@ const kindOptions = [
             </Select>
           </div>
 
-          <div class="space-y-2">
-            <Label>Categoria *</Label>
-            <CategorySelect v-model="txForm.category" />
+          <!-- Método (segundo, condicional) -->
+          <div v-if="txForm.type !== 'income'" class="space-y-2">
+            <Label>Método *</Label>
+            <Select v-model="txForm.payment_method">
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="opt in methodOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
+
+          <!-- Conta (terceiro) -->
+          <div class="space-y-2">
+            <Label>Conta *</Label>
+            <Select v-model="txForm.accountId">
+              <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="acc in availableAccounts" :key="acc.id" :value="acc.id">{{ acc.label }}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
 
           <div class="space-y-2">
             <Label>Valor *</Label>
@@ -393,23 +526,14 @@ const kindOptions = [
             <Input v-model="txForm.date" type="date" />
           </div>
 
-          <div class="space-y-2">
+          <div class="col-span-2 space-y-2">
             <Label>Descrição</Label>
             <Input v-model="txForm.description" placeholder="Opcional" />
           </div>
         </div>
 
-        <div class="space-y-2">
-          <Label>Tags</Label>
-          <TagSelect v-model="txForm.tags" />
-        </div>
 
-        <div class="flex items-center gap-2">
-          <Checkbox v-model="txForm.paid" />
-          <Label>Pago</Label>
-        </div>
-
-        <div v-if="!isEdit" class="space-y-3">
+        <div v-if="!isEdit && txForm.type === 'expense'" class="space-y-3">
           <div class="flex items-center gap-2">
             <Checkbox v-model="txForm.parcelado" />
             <Label>Parcelado</Label>
@@ -435,21 +559,31 @@ const kindOptions = [
       <template v-if="tipoMovimentacao === 'recorrente'">
         <div class="grid grid-cols-2 gap-4">
           <div class="space-y-2">
-            <Label>Conta *</Label>
-            <Select v-model="recForm.accountId">
-              <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="acc in accountsStore.accounts" :key="acc.id" :value="acc.id">{{ acc.label }}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div class="space-y-2">
             <Label>Tipo *</Label>
             <Select v-model="recForm.kind">
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem v-for="opt in kindOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div v-if="recForm.kind === 'expense'" class="space-y-2">
+            <Label>Cobranca *</Label>
+            <Select v-model="recForm.payment_method">
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="opt in recPaymentMethodOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div v-if="recForm.kind !== 'expense' || recForm.payment_method === 'credit'" class="space-y-2">
+            <Label>Conta *</Label>
+            <Select v-model="recForm.accountId">
+              <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="acc in accountsStore.accounts" :key="acc.id" :value="acc.id">{{ acc.label }}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -464,14 +598,21 @@ const kindOptions = [
             <MoneyInput v-model="recForm.amount" />
           </div>
 
-          <div class="space-y-2">
-            <Label>Dia do mês</Label>
-            <Input v-model="recForm.day_of_month" placeholder="1-31" type="number" min="1" max="31" />
-          </div>
 
-          <div class="space-y-2">
+          <div
+            v-if="recForm.kind === 'expense' && recForm.payment_method === 'debit'"
+            class="space-y-2"
+          >
             <Label>Vencimento (dia)</Label>
             <Input v-model="recForm.due_day" placeholder="1-31" type="number" min="1" max="31" />
+          </div>
+
+          <div
+            v-if="recForm.kind === 'income'"
+            class="space-y-2"
+          >
+            <Label>Recebimento (dia)</Label>
+            <Input v-model="recForm.day_of_month" placeholder="1-31" type="number" min="1" max="31" />
           </div>
 
           <div class="col-span-2 space-y-2">
@@ -480,9 +621,15 @@ const kindOptions = [
           </div>
         </div>
 
-        <div class="flex items-center gap-2">
-          <Checkbox v-model="recForm.active" />
-          <Label>Ativo</Label>
+        <div class="flex items-center gap-6">
+          <div v-if="showRecNotify" class="flex items-center gap-2">
+            <Checkbox v-model="recForm.notify" />
+            <Label>Notificar</Label>
+          </div>
+          <div class="flex items-center gap-2">
+            <Checkbox v-model="recForm.active" />
+            <Label>Ativo</Label>
+          </div>
         </div>
       </template>
 
@@ -543,11 +690,6 @@ const kindOptions = [
         </div>
       </template>
 
-      <Alert v-if="error" variant="destructive">
-        <AlertCircleIcon class="size-4" />
-        <AlertDescription>{{ error }}</AlertDescription>
-      </Alert>
-
       <Button type="submit" :disabled="loading" class="w-full">
         <Save class="h-4 w-4 mr-2" />
         {{ loading ? 'Salvando...' : (isEdit ? 'Atualizar' : 'Salvar') }}
@@ -555,3 +697,4 @@ const kindOptions = [
     </form>
   </Tabs>
 </template>
+

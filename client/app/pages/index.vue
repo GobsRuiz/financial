@@ -3,7 +3,7 @@ import { LayoutDashboard, TrendingUp, TrendingDown, Wallet, PiggyBank, Clock } f
 import { useAccountsStore } from '~/stores/useAccounts'
 import { useTransactionsStore } from '~/stores/useTransactions'
 import { useRecurrentsStore } from '~/stores/useRecurrents'
-import { useInvestmentsStore } from '~/stores/useInvestments'
+import { useInvestmentPositionsStore } from '~/stores/useInvestmentPositions'
 import { formatCentsToBRL } from '~/utils/money'
 import { monthKey } from '~/utils/dates'
 import dayjs from 'dayjs'
@@ -11,7 +11,7 @@ import dayjs from 'dayjs'
 const accountsStore = useAccountsStore()
 const transactionsStore = useTransactionsStore()
 const recurrentsStore = useRecurrentsStore()
-const investmentsStore = useInvestmentsStore()
+const investmentPositionsStore = useInvestmentPositionsStore()
 
 const loading = ref(true)
 const currentMonth = monthKey(dayjs().format('YYYY-MM-DD'))
@@ -22,7 +22,7 @@ onMounted(async () => {
       accountsStore.loadAccounts(),
       transactionsStore.loadTransactions(),
       recurrentsStore.loadRecurrents(),
-      investmentsStore.loadInvestments(),
+      investmentPositionsStore.loadPositions(),
     ])
   } finally {
     loading.value = false
@@ -56,9 +56,9 @@ const saldoTotal = computed(() =>
   accountsStore.accounts.reduce((sum, a) => sum + a.balance_cents, 0)
 )
 
-// Investido (soma applied)
+// Investido (soma das posições de investimento)
 const investidoTotal = computed(() =>
-  investmentsStore.investments.reduce((sum, i) => sum + i.applied_cents, 0)
+  investmentPositionsStore.positions.reduce((sum, position) => sum + (position.invested_cents ?? 0), 0)
 )
 
 // Pendentes do mês
@@ -143,7 +143,7 @@ function getAccountLabel(accountId: number) {
               Saldo Total
             </div>
             <p class="text-2xl font-bold" :class="saldoTotal >= 0 ? 'text-green-500' : 'text-red-500'">
-              {{ formatCentsToBRL(Math.abs(saldoTotal)) }}
+              {{ formatCentsToBRL(saldoTotal) }}
             </p>
           </CardContent>
         </Card>
@@ -197,7 +197,7 @@ function getAccountLabel(accountId: number) {
                   <span v-if="tx.installment">
                     {{ tx.installment.product }} ({{ tx.installment.index }}/{{ tx.installment.total }})
                   </span>
-                  <span v-else>{{ tx.description || tx.category }}</span>
+                  <span v-else>{{ tx.description || 'Transacao' }}</span>
                 </TableCell>
                 <TableCell>{{ getAccountLabel(tx.accountId) }}</TableCell>
                 <TableCell>
@@ -205,7 +205,7 @@ function getAccountLabel(accountId: number) {
                   <Badge v-else variant="outline" class="text-yellow-500 border-yellow-500/30">Pendente</Badge>
                 </TableCell>
                 <TableCell class="text-right" :class="tx.amount_cents < 0 ? 'text-red-500' : 'text-green-500'">
-                  {{ formatCentsToBRL(Math.abs(tx.amount_cents)) }}
+                  {{ formatCentsToBRL(tx.amount_cents) }}
                 </TableCell>
               </TableRow>
             </TableBody>

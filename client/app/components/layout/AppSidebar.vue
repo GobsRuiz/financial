@@ -15,7 +15,7 @@ const menuItems = [
   { label: 'Dashboard', icon: LayoutDashboard, to: '/' },
   { label: 'Movimentações', icon: ArrowLeftRight, to: '/movimentacoes' },
   { label: 'Investimentos', icon: CandlestickChart, to: '/investimentos' },
-  { label: 'Pendentes', icon: Clock, to: '/pendentes' },
+  { label: 'Pagamentos', icon: Clock, to: '/pagamentos' },
   { label: 'Contas', icon: Landmark, to: '/contas' },
   { label: 'Histórico', icon: Wallet, to: '/historico' },
   { label: 'Settings', icon: Settings, to: '/settings' },

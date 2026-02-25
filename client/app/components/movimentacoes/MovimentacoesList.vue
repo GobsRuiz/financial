@@ -13,6 +13,7 @@ import { useAppToast } from '~/composables/useAppToast'
 const emit = defineEmits<{
   'edit-transaction': [tx: Transaction]
   'edit-recurrent': [rec: Recurrent]
+  'tab-change': [tab: 'transacoes' | 'recorrentes' | 'investimentos']
 }>()
 
 const transactionsStore = useTransactionsStore()
@@ -26,6 +27,7 @@ const appToast = useAppToast()
 const txFiltersOpen = ref(false)
 const recFiltersOpen = ref(false)
 const invFiltersOpen = ref(false)
+const activeTab = ref<'transacoes' | 'recorrentes' | 'investimentos'>('transacoes')
 
 // ── Filtros Transações ──
 const txFilterConta = ref<number | null>(null)
@@ -44,11 +46,19 @@ const expandedParents = ref<Set<string>>(new Set())
 
 // ── Visualização Transação ──
 const viewingTransaction = ref<Transaction | null>(null)
-const viewDialogOpen = ref(false)
+const transactionViewDialogOpen = ref(false)
 
 function openViewTransaction(tx: Transaction) {
   viewingTransaction.value = tx
-  viewDialogOpen.value = true
+  transactionViewDialogOpen.value = true
+}
+
+const viewingRecurrent = ref<Recurrent | null>(null)
+const recurrentViewDialogOpen = ref(false)
+
+function openViewRecurrent(rec: Recurrent) {
+  viewingRecurrent.value = rec
+  recurrentViewDialogOpen.value = true
 }
 
 // ── Confirm Delete ──
@@ -70,7 +80,7 @@ function getAccountLabel(accountId: number) {
 function getPositionLabel(positionId: string) {
   const p = investmentPositionsStore.positions.find(pos => pos.id === positionId)
   if (!p) return '—'
-  return `${p.asset_code} · ${p.name}`
+  return p.name?.trim() ? `${p.asset_code} · ${p.name}` : p.asset_code
 }
 
 function getPositionBucketLabel(positionId: string) {
@@ -190,6 +200,10 @@ function clearRecFilters() {
 function clearInvFilters() {
   invFilterConta.value = null
 }
+
+watch(activeTab, (tab) => {
+  emit('tab-change', tab)
+}, { immediate: true })
 </script>
 
 <template>
@@ -197,7 +211,7 @@ function clearInvFilters() {
   <Card>
     <CardContent class="pt-6 space-y-4">
       <!-- Tabs por tipo -->
-      <Tabs default-value="transacoes">
+      <Tabs v-model="activeTab">
         <TabsList class="w-full justify-start">
           <TabsTrigger value="transacoes">
             Transações
@@ -276,12 +290,10 @@ function clearInvFilters() {
               <TableRow>
                 <TableHead class="w-8"></TableHead>
                 <TableHead>Valor</TableHead>
-                <TableHead>Categoria</TableHead>
-                <TableHead>Descrição</TableHead>
+                <TableHead>Tipo</TableHead>
+                <TableHead>Método</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Data</TableHead>
-                <TableHead>Tags</TableHead>
-                <TableHead>Conta</TableHead>
                 <TableHead class="w-10"></TableHead>
               </TableRow>
             </TableHeader>
@@ -297,30 +309,24 @@ function clearInvFilters() {
                       <ChevronRight v-else class="h-4 w-4" />
                     </button>
                   </TableCell>
-                  <TableCell :class="tx.amount_cents < 0 ? 'text-red-500' : 'text-green-500'">
-                    {{ formatCentsToBRL(Math.abs(tx.installment ? tx.amount_cents * tx.installment.total : tx.amount_cents)) }}
+                  <TableCell :class="tx.type === 'income' ? 'text-green-500' : 'text-red-500'">
+                    {{ formatCentsToBRL(tx.installment ? tx.amount_cents * tx.installment.total : tx.amount_cents) }}
                   </TableCell>
-                  <TableCell>{{ tx.category }}</TableCell>
                   <TableCell>
-                    <span v-if="tx.installment">
-                      {{ tx.installment.product }} {{ tx.installment.total }}x
-                    </span>
-                    <span v-else>{{ tx.description || '—' }}</span>
+                    <Badge variant="secondary">
+                      {{ tx.type === 'expense' ? 'Despesa' : tx.type === 'income' ? 'Receita' : 'Transferência' }}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge v-if="tx.payment_method === 'credit'" variant="secondary">Crédito</Badge>
+                    <Badge v-else-if="tx.payment_method === 'debit'" variant="secondary">Débito</Badge>
+                    <span v-else class="text-muted-foreground">—</span>
                   </TableCell>
                   <TableCell>
                     <Badge v-if="tx.paid" variant="outline" class="text-green-500 border-green-500/30">Pago</Badge>
                     <Badge v-else variant="outline" class="text-yellow-500 border-yellow-500/30">Pendente</Badge>
                   </TableCell>
                   <TableCell>{{ tx.date }}</TableCell>
-                  <TableCell>
-                    <div v-if="tx.tags?.length" class="flex flex-wrap gap-1">
-                      <Badge v-for="tag in tx.tags" :key="tag" variant="secondary" class="text-xs">
-                        {{ tag }}
-                      </Badge>
-                    </div>
-                    <span v-else class="text-muted-foreground">—</span>
-                  </TableCell>
-                  <TableCell>{{ getAccountLabel(tx.accountId) }}</TableCell>
                   <TableCell>
                     <DropdownMenu>
                       <DropdownMenuTrigger as-child>
@@ -341,7 +347,7 @@ function clearInvFilters() {
                           variant="destructive"
                           @click.stop="tx.installment
                             ? requestDelete('installment-group', tx.installment.parentId, `${tx.installment.product} ${tx.installment.total}x`)
-                            : requestDelete('transaction', tx.id, tx.description || tx.category)"
+                            : requestDelete('transaction', tx.id, tx.description || 'Transacao')"
                         >
                           <Trash2 class="h-4 w-4 mr-2" />
                           Excluir
@@ -352,7 +358,7 @@ function clearInvFilters() {
                 </TableRow>
                 <!-- Parcelas expandidas -->
                 <TableRow v-if="tx.installment && expandedParents.has(tx.installment.parentId)" :key="`${tx.id}-expand`">
-                  <TableCell colspan="9" class="p-0 pt-0 pb-2">
+                  <TableCell colspan="7" class="p-0 pt-0 pb-2">
                     <ParcelasExpansion :parent-id="tx.installment.parentId" />
                   </TableCell>
                 </TableRow>
@@ -423,40 +429,54 @@ function clearInvFilters() {
                 <TableHead>Conta</TableHead>
                 <TableHead>Dia</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Notificar</TableHead>
                 <TableHead class="text-right">Valor</TableHead>
                 <TableHead class="w-10"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow v-for="rec in filteredRecurrents" :key="rec.id">
+              <TableRow
+                v-for="rec in filteredRecurrents"
+                :key="rec.id"
+                class="cursor-pointer"
+                @click="openViewRecurrent(rec)"
+              >
                 <TableCell>{{ rec.name }}</TableCell>
                 <TableCell>
-                  <Badge variant="secondary">{{ rec.kind }}</Badge>
+                  <Badge variant="secondary">{{ rec.kind === 'expense' ? 'Despesa' : 'Receita' }}</Badge>
                 </TableCell>
                 <TableCell>{{ getAccountLabel(rec.accountId) }}</TableCell>
-                <TableCell>{{ rec.day_of_month ?? '—' }}</TableCell>
+                <TableCell>{{ rec.due_day ?? rec.day_of_month ?? '—' }}</TableCell>
                 <TableCell>
                   <Badge v-if="rec.active" variant="outline" class="text-green-500 border-green-500/30">Ativo</Badge>
                   <Badge v-else variant="outline" class="text-muted-foreground">Inativo</Badge>
                 </TableCell>
+                <TableCell>
+                  <Badge v-if="rec.notify" variant="outline" class="text-blue-500 border-blue-500/30">Sim</Badge>
+                  <Badge v-else variant="outline" class="text-muted-foreground">Não</Badge>
+                </TableCell>
                 <TableCell class="text-right" :class="rec.amount_cents < 0 ? 'text-red-500' : 'text-green-500'">
-                  {{ formatCentsToBRL(Math.abs(rec.amount_cents)) }}
+                  {{ formatCentsToBRL(rec.amount_cents) }}
                 </TableCell>
                 <TableCell>
                   <DropdownMenu>
-                    <DropdownMenuTrigger as-child>
-                      <Button variant="ghost" size="icon" class="h-8 w-8">
-                        <MoreHorizontal class="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem @click="emit('edit-recurrent', rec)">
+                      <DropdownMenuTrigger as-child>
+                        <Button variant="ghost" size="icon" class="h-8 w-8" @click.stop>
+                          <MoreHorizontal class="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                      <DropdownMenuItem @click.stop="openViewRecurrent(rec)">
+                        <Eye class="h-4 w-4 mr-2" />
+                        Visualizar
+                      </DropdownMenuItem>
+                      <DropdownMenuItem @click.stop="emit('edit-recurrent', rec)">
                         <Pencil class="h-4 w-4 mr-2" />
                         Editar
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         variant="destructive"
-                        @click="requestDelete('recurrent', rec.id, rec.name)"
+                        @click.stop="requestDelete('recurrent', rec.id, rec.name)"
                       >
                         <Trash2 class="h-4 w-4 mr-2" />
                         Excluir
@@ -566,57 +586,110 @@ function clearInvFilters() {
   </Card>
 
   <!-- Modal Visualização Transação -->
-  <Dialog v-model:open="viewDialogOpen">
-    <DialogContent class="max-w-md">
+  <Dialog v-model:open="transactionViewDialogOpen">
+    <DialogContent class="max-w-lg">
       <DialogHeader>
         <DialogTitle>Detalhes da Transação</DialogTitle>
         <DialogDescription>Informações completas da movimentação</DialogDescription>
       </DialogHeader>
-      <div v-if="viewingTransaction" class="space-y-3 text-sm">
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <p class="text-muted-foreground">Valor</p>
-            <p class="font-medium" :class="viewingTransaction.amount_cents < 0 ? 'text-red-500' : 'text-green-500'">
-              {{ formatCentsToBRL(Math.abs(viewingTransaction.amount_cents)) }}
+      <div v-if="viewingTransaction" class="space-y-4 text-sm">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+            <p class="text-[11px] uppercase tracking-wide text-muted-foreground">Valor</p>
+            <p class="mt-1 text-lg font-semibold" :class="viewingTransaction.type === 'income' ? 'text-green-500' : 'text-red-500'">
+              {{ formatCentsToBRL(viewingTransaction.amount_cents) }}
             </p>
           </div>
-          <div>
-            <p class="text-muted-foreground">Tipo</p>
-            <p class="font-medium">{{ viewingTransaction.type === 'expense' ? 'Despesa' : viewingTransaction.type === 'income' ? 'Receita' : 'Transferência' }}</p>
+
+          <div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+            <p class="text-[11px] uppercase tracking-wide text-muted-foreground">Tipo</p>
+            <p class="mt-1 font-medium">{{ viewingTransaction.type === 'expense' ? 'Despesa' : viewingTransaction.type === 'income' ? 'Receita' : 'Transferência' }}</p>
           </div>
-          <div>
-            <p class="text-muted-foreground">Categoria</p>
-            <p class="font-medium">{{ viewingTransaction.category }}</p>
+          <div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+            <p class="text-[11px] uppercase tracking-wide text-muted-foreground">Método</p>
+            <p class="mt-1 font-medium">{{ viewingTransaction.payment_method === 'credit' ? 'Crédito' : viewingTransaction.payment_method === 'debit' ? 'Débito' : '—' }}</p>
           </div>
-          <div>
-            <p class="text-muted-foreground">Data</p>
-            <p class="font-medium">{{ viewingTransaction.date }}</p>
+          <div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+            <p class="text-[11px] uppercase tracking-wide text-muted-foreground">Status</p>
+            <div class="mt-1">
+              <Badge v-if="viewingTransaction.paid" variant="outline" class="text-green-500 border-green-500/30">Pago</Badge>
+              <Badge v-else variant="outline" class="text-yellow-500 border-yellow-500/30">Pendente</Badge>
+            </div>
           </div>
-          <div>
-            <p class="text-muted-foreground">Conta</p>
-            <p class="font-medium">{{ getAccountLabel(viewingTransaction.accountId) }}</p>
+          <div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+            <p class="text-[11px] uppercase tracking-wide text-muted-foreground">Data</p>
+            <p class="mt-1 font-medium">{{ viewingTransaction.date }}</p>
           </div>
-          <div>
-            <p class="text-muted-foreground">Status</p>
-            <Badge v-if="viewingTransaction.paid" variant="outline" class="text-green-500 border-green-500/30">Pago</Badge>
-            <Badge v-else variant="outline" class="text-yellow-500 border-yellow-500/30">Pendente</Badge>
-          </div>
-        </div>
-        <div v-if="viewingTransaction.description">
-          <p class="text-muted-foreground">Descrição</p>
-          <p class="font-medium">{{ viewingTransaction.description }}</p>
-        </div>
-        <div v-if="viewingTransaction.tags?.length">
-          <p class="text-muted-foreground mb-1">Tags</p>
-          <div class="flex flex-wrap gap-1">
-            <Badge v-for="tag in viewingTransaction.tags" :key="tag" variant="secondary">
-              {{ tag }}
-            </Badge>
+          <div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2 sm:col-span-2">
+            <p class="text-[11px] uppercase tracking-wide text-muted-foreground">Conta</p>
+            <p class="mt-1 font-medium">{{ getAccountLabel(viewingTransaction.accountId) }}</p>
           </div>
         </div>
-        <div v-if="viewingTransaction.installment">
-          <p class="text-muted-foreground">Parcela</p>
-          <p class="font-medium">{{ viewingTransaction.installment.index }}/{{ viewingTransaction.installment.total }} — {{ viewingTransaction.installment.product }}</p>
+
+        <div class="space-y-2">
+          <div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+            <p class="text-[11px] uppercase tracking-wide text-muted-foreground">Descrição</p>
+            <p class="mt-1 font-medium">{{ viewingTransaction.description || '—' }}</p>
+          </div>
+
+
+          <div v-if="viewingTransaction.installment" class="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+            <p class="text-[11px] uppercase tracking-wide text-muted-foreground">Parcela</p>
+            <p class="mt-1 font-medium">{{ viewingTransaction.installment.index }}/{{ viewingTransaction.installment.total }} — {{ viewingTransaction.installment.product }}</p>
+          </div>
+        </div>
+      </div>
+    </DialogContent>
+  </Dialog>
+
+  <!-- Modal VisualizaÃ§Ã£o Recorrente -->
+  <Dialog v-model:open="recurrentViewDialogOpen">
+    <DialogContent class="max-w-lg">
+      <DialogHeader>
+        <DialogTitle>Detalhes da Recorrente</DialogTitle>
+        <DialogDescription>InformaÃ§Ãµes completas da movimentaÃ§Ã£o</DialogDescription>
+      </DialogHeader>
+      <div v-if="viewingRecurrent" class="space-y-4 text-sm">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+            <p class="text-[11px] uppercase tracking-wide text-muted-foreground">Valor</p>
+            <p class="mt-1 text-lg font-semibold" :class="viewingRecurrent.amount_cents < 0 ? 'text-red-500' : 'text-green-500'">
+              {{ formatCentsToBRL(viewingRecurrent.amount_cents) }}
+            </p>
+          </div>
+          <div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+            <p class="text-[11px] uppercase tracking-wide text-muted-foreground">Tipo</p>
+            <p class="mt-1 font-medium">{{ viewingRecurrent.kind === 'expense' ? 'Despesa' : 'Receita' }}</p>
+          </div>
+          <div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+            <p class="text-[11px] uppercase tracking-wide text-muted-foreground">Status</p>
+            <div class="mt-1">
+              <Badge v-if="viewingRecurrent.active" variant="outline" class="text-green-500 border-green-500/30">Ativo</Badge>
+              <Badge v-else variant="outline" class="text-muted-foreground">Inativo</Badge>
+            </div>
+          </div>
+          <div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+            <p class="text-[11px] uppercase tracking-wide text-muted-foreground">FrequÃªncia</p>
+            <p class="mt-1 font-medium">{{ viewingRecurrent.frequency === 'monthly' ? 'Mensal' : viewingRecurrent.frequency }}</p>
+          </div>
+          <div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+            <p class="text-[11px] uppercase tracking-wide text-muted-foreground">Vencimento</p>
+            <p class="mt-1 font-medium">{{ viewingRecurrent.due_day ?? viewingRecurrent.day_of_month ?? 'â€”' }}</p>
+          </div>
+          <div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2 sm:col-span-2">
+            <p class="text-[11px] uppercase tracking-wide text-muted-foreground">Conta</p>
+            <p class="mt-1 font-medium">{{ getAccountLabel(viewingRecurrent.accountId) }}</p>
+          </div>
+        </div>
+
+        <div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+          <p class="text-[11px] uppercase tracking-wide text-muted-foreground">Nome</p>
+          <p class="mt-1 font-medium">{{ viewingRecurrent.name }}</p>
+        </div>
+
+        <div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+          <p class="text-[11px] uppercase tracking-wide text-muted-foreground">DescriÃ§Ã£o</p>
+          <p class="mt-1 font-medium">{{ viewingRecurrent.description || 'â€”' }}</p>
         </div>
       </div>
     </DialogContent>
@@ -635,3 +708,5 @@ function clearInvFilters() {
   />
   </div>
 </template>
+
+

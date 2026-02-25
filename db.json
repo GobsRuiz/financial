@@ -2,409 +2,301 @@
   "accounts": [
     {
       "bank": "inter",
-      "label": "Inter",
+      "label": "Inter Principal",
       "type": "bank",
-      "balance_cents": 58412,
-      "card_closing_day": 28,
-      "card_due_day": 4,
+      "balance_cents": 347190,
+      "card_closing_day": 24,
+      "card_due_day": 26,
       "id": 1
-    },
-    {
-      "bank": "inter",
-      "label": "Inter Empresas",
-      "type": "bank",
-      "balance_cents": 0,
-      "id": 2
-    },
-    {
-      "bank": "nubank",
-      "label": "Nubank Principal",
-      "type": "bank",
-      "balance_cents": 0,
-      "id": 3
     }
   ],
   "transactions": [
     {
       "accountId": 1,
-      "date": "2026-02-24",
+      "date": "2026-02-25",
       "type": "expense",
-      "category": "Supermercado",
-      "amount_cents": -10000,
-      "tags": [
-        "supermercado"
-      ],
+      "payment_method": "credit",
+      "amount_cents": -55000,
       "paid": true,
       "installment": null,
-      "id": "a7d89137-4016-4f71-a8dd-bf09551663c7"
+      "id": "6c45e599-f642-411c-8f2d-72129bb901fb"
     },
     {
       "accountId": 1,
-      "date": "2026-02-24",
+      "date": "2026-02-25",
       "type": "expense",
-      "category": "Supermercado",
-      "amount_cents": -1,
-      "paid": false,
-      "installment": null,
-      "id": "c829230f-adac-49c8-aab8-85772bee5d7a"
-    },
-    {
-      "accountId": 1,
-      "date": "2026-02-24",
-      "type": "expense",
-      "category": "Supermercado",
-      "amount_cents": -10000,
-      "paid": false,
-      "installment": null,
-      "id": "afa82ff4-a179-41be-b3cc-ba67e0ffe7ac"
-    },
-    {
-      "id": "23c47d07-6923-4b63-baa9-d4799b20d17f",
-      "accountId": 1,
-      "date": "2026-02-24",
-      "type": "expense",
-      "category": "Casa",
-      "amount_cents": -30587,
-      "tags": [
-        "casa"
-      ],
+      "payment_method": "credit",
+      "amount_cents": -12,
       "paid": true,
-      "installment": {
-        "parentId": "f400562e-46a8-42b9-886a-dfa0f39ebbfc",
-        "total": 10,
-        "index": 1,
-        "product": "Geladeira"
-      }
+      "installment": null,
+      "id": "e3dd0410-15ac-4a4c-a3d1-6cc97b0c36ba"
     },
     {
-      "id": "f22ac066-789e-4673-97df-1d44a78a4e84",
       "accountId": 1,
-      "date": "2026-03-24",
+      "date": "2026-02-25",
       "type": "expense",
-      "category": "Casa",
-      "amount_cents": -30587,
-      "tags": [
-        "casa"
-      ],
-      "paid": false,
-      "installment": {
-        "parentId": "f400562e-46a8-42b9-886a-dfa0f39ebbfc",
-        "total": 10,
-        "index": 2,
-        "product": "Geladeira"
-      }
+      "payment_method": "credit",
+      "amount_cents": -986,
+      "paid": true,
+      "installment": null,
+      "id": "24b90bdf-fae5-4959-8627-96dbb55a7def"
     },
     {
-      "id": "be4cadf6-f6c6-4f65-9613-282d18b26a60",
+      "accountId": 1,
+      "date": "2026-02-25",
+      "type": "expense",
+      "payment_method": "credit",
+      "amount_cents": -29,
+      "paid": true,
+      "installment": null,
+      "id": "3eba0ad6-a8b9-449a-9446-4527b6eb00c2"
+    },
+    {
+      "accountId": 1,
+      "date": "2026-02-25",
+      "type": "expense",
+      "payment_method": "credit",
+      "amount_cents": -2466,
+      "paid": true,
+      "installment": null,
+      "id": "5d00aeef-2f91-4723-8485-8467f2028bc9"
+    },
+    {
+      "accountId": 1,
+      "date": "2026-02-25",
+      "type": "expense",
+      "payment_method": "credit",
+      "amount_cents": -34555,
+      "paid": true,
+      "installment": null,
+      "id": "60faff4c-f8b9-4960-bac2-7cbe3b79d1c6"
+    },
+    {
+      "accountId": 1,
+      "date": "2026-02-25",
+      "type": "expense",
+      "payment_method": "credit",
+      "amount_cents": -9762,
+      "paid": true,
+      "installment": null,
+      "id": "0f4edf42-f770-43ad-a3d1-b95df3586ec2"
+    },
+    {
+      "accountId": 1,
+      "date": "2026-02-25",
+      "type": "expense",
+      "payment_method": "credit",
+      "amount_cents": -20000,
+      "paid": true,
+      "installment": null,
+      "id": "01f16af0-29b5-4c3d-8aba-6478d818959a"
+    },
+    {
+      "accountId": 1,
+      "date": "2026-02-25",
+      "type": "expense",
+      "payment_method": "credit",
+      "amount_cents": -50000,
+      "description": "5",
+      "paid": true,
+      "installment": null,
+      "id": "adf50452-c10e-4d55-82f6-c691c81f595d"
+    },
+    {
+      "accountId": 1,
+      "date": "2026-02-23",
+      "type": "expense",
+      "payment_method": "credit",
+      "amount_cents": -50000,
+      "paid": true,
+      "installment": null,
+      "id": "6ad18fbd-58de-49b7-8df0-655239fe219d"
+    },
+    {
       "accountId": 1,
       "date": "2026-04-24",
       "type": "expense",
-      "category": "Casa",
-      "amount_cents": -30587,
-      "tags": [
-        "casa"
-      ],
+      "payment_method": "credit",
+      "amount_cents": -55555,
       "paid": false,
-      "installment": {
-        "parentId": "f400562e-46a8-42b9-886a-dfa0f39ebbfc",
-        "total": 10,
-        "index": 3,
-        "product": "Geladeira"
-      }
+      "installment": null,
+      "id": "6a9cbb64-c92e-4fbc-b85b-930301a7491d"
     },
     {
-      "id": "2c750bc5-c1cc-403b-8e5b-e3f3f550ab06",
       "accountId": 1,
-      "date": "2026-05-24",
-      "type": "expense",
-      "category": "Casa",
-      "amount_cents": -30587,
-      "tags": [
-        "casa"
-      ],
-      "paid": false,
-      "installment": {
-        "parentId": "f400562e-46a8-42b9-886a-dfa0f39ebbfc",
-        "total": 10,
-        "index": 4,
-        "product": "Geladeira"
-      }
-    },
-    {
-      "id": "8878f9d4-b6cc-4b2d-9477-cb19c8b60b16",
-      "accountId": 1,
-      "date": "2026-06-24",
-      "type": "expense",
-      "category": "Casa",
-      "amount_cents": -30587,
-      "tags": [
-        "casa"
-      ],
-      "paid": false,
-      "installment": {
-        "parentId": "f400562e-46a8-42b9-886a-dfa0f39ebbfc",
-        "total": 10,
-        "index": 5,
-        "product": "Geladeira"
-      }
-    },
-    {
-      "id": "17e6e40f-8229-464c-9fca-5b100b1e684b",
-      "accountId": 1,
-      "date": "2026-07-24",
-      "type": "expense",
-      "category": "Casa",
-      "amount_cents": -30587,
-      "tags": [
-        "casa"
-      ],
-      "paid": false,
-      "installment": {
-        "parentId": "f400562e-46a8-42b9-886a-dfa0f39ebbfc",
-        "total": 10,
-        "index": 6,
-        "product": "Geladeira"
-      }
-    },
-    {
-      "id": "1567e171-322f-41f0-ad44-557cdb7a894a",
-      "accountId": 1,
-      "date": "2026-08-24",
-      "type": "expense",
-      "category": "Casa",
-      "amount_cents": -30587,
-      "tags": [
-        "casa"
-      ],
-      "paid": false,
-      "installment": {
-        "parentId": "f400562e-46a8-42b9-886a-dfa0f39ebbfc",
-        "total": 10,
-        "index": 7,
-        "product": "Geladeira"
-      }
-    },
-    {
-      "id": "d9918716-7b42-4e4e-b06e-bd7736aa0804",
-      "accountId": 1,
-      "date": "2026-09-24",
-      "type": "expense",
-      "category": "Casa",
-      "amount_cents": -30587,
-      "tags": [
-        "casa"
-      ],
-      "paid": false,
-      "installment": {
-        "parentId": "f400562e-46a8-42b9-886a-dfa0f39ebbfc",
-        "total": 10,
-        "index": 8,
-        "product": "Geladeira"
-      }
-    },
-    {
-      "id": "e7045e11-8125-47f2-8064-d3a521f9f71a",
-      "accountId": 1,
-      "date": "2026-10-24",
-      "type": "expense",
-      "category": "Casa",
-      "amount_cents": -30587,
-      "tags": [
-        "casa"
-      ],
-      "paid": false,
-      "installment": {
-        "parentId": "f400562e-46a8-42b9-886a-dfa0f39ebbfc",
-        "total": 10,
-        "index": 9,
-        "product": "Geladeira"
-      }
-    },
-    {
-      "id": "c646638a-66e2-4093-bbe8-a9e3110929aa",
-      "accountId": 1,
-      "date": "2026-11-24",
-      "type": "expense",
-      "category": "Casa",
-      "amount_cents": -30587,
-      "tags": [
-        "casa"
-      ],
-      "paid": false,
-      "installment": {
-        "parentId": "f400562e-46a8-42b9-886a-dfa0f39ebbfc",
-        "total": 10,
-        "index": 10,
-        "product": "Geladeira"
-      }
+      "date": "2026-02-25",
+      "type": "income",
+      "amount_cents": 500000,
+      "paid": true,
+      "installment": null,
+      "id": "130fb9b7-ebae-4199-9685-7dfd9a811e96"
     }
   ],
-  "recurrents": [],
-  "investments": [
+  "recurrents": [
     {
       "accountId": 1,
-      "investment_type": "fii",
-      "asset_tag": "MXRF11",
-      "applied_cents": 76560,
-      "details": {
-        "quantity": 80,
-        "avg_unit_price_cents": 957
-      },
-      "id": "89d209f0-8b4c-4171-9e78-938602495d6c"
+      "kind": "expense",
+      "payment_method": "debit",
+      "notify": true,
+      "name": "Aluguel",
+      "amount_cents": -140000,
+      "frequency": "monthly",
+      "due_day": 21,
+      "active": true,
+      "id": "61d21622-bd4d-445a-9a23-d4cc20adf3d6"
+    },
+    {
+      "accountId": 1,
+      "kind": "expense",
+      "payment_method": "debit",
+      "notify": true,
+      "name": "Academia",
+      "amount_cents": -25000,
+      "frequency": "monthly",
+      "due_day": 31,
+      "active": true,
+      "id": "6436d2c7-1ed8-4a3e-b755-8c189c3cb5c5"
+    },
+    {
+      "accountId": 1,
+      "kind": "expense",
+      "payment_method": "credit",
+      "notify": false,
+      "name": "Assinatura",
+      "amount_cents": -20000,
+      "frequency": "monthly",
+      "active": true,
+      "id": "3f85c187-9400-4c2f-9aac-9eb0fb4e3aeb"
+    },
+    {
+      "accountId": 1,
+      "kind": "expense",
+      "payment_method": "debit",
+      "notify": true,
+      "name": "Internert",
+      "amount_cents": -10000,
+      "frequency": "monthly",
+      "due_day": 28,
+      "active": true,
+      "id": "c61122c4-1f74-40b0-9239-10026e433c43"
+    },
+    {
+      "accountId": 1,
+      "kind": "expense",
+      "payment_method": "debit",
+      "notify": true,
+      "name": "Aleaz",
+      "amount_cents": -50000,
+      "frequency": "monthly",
+      "due_day": 27,
+      "active": true,
+      "id": "86544bfd-7e8b-4ec8-b24d-e1042f96d3c6"
+    },
+    {
+      "accountId": 1,
+      "kind": "expense",
+      "payment_method": "debit",
+      "notify": true,
+      "name": "Master",
+      "amount_cents": -20000,
+      "frequency": "monthly",
+      "due_day": 26,
+      "active": true,
+      "id": "bbe64dff-725a-4d3f-96cd-9b54981e55a8"
+    },
+    {
+      "accountId": 1,
+      "kind": "income",
+      "notify": false,
+      "name": "asdas",
+      "amount_cents": 50000,
+      "frequency": "monthly",
+      "day_of_month": 10,
+      "active": true,
+      "id": "6ad077b8-82be-4af9-b130-d02dac1290fe"
     }
   ],
+  "investments": [],
   "investment_positions": [],
   "investment_events": [],
-  "tags": [
-    {
-      "id": "7805f7b7-6bd6-4e5e-bff8-625ff53e4e04",
-      "name": "supermercado"
-    },
-    {
-      "id": "4f1c7a40-589a-49ab-b0ee-96bda16f9412",
-      "name": "casa"
-    }
-  ],
+  "tags": [],
   "history": [
     {
-      "id": "0e0bcc59-8f5b-4a57-bcee-522fb4893494",
+      "id": "c713d9ba-8d67-4ac7-8995-c86700812542",
       "accountId": 1,
-      "date": "2026-02-24",
-      "balance_cents": 88999,
-      "note": "Supermercado"
+      "date": "2026-02-25",
+      "balance_cents": 15000,
+      "note": "Transacao"
     },
     {
-      "id": "60414c82-49aa-42fb-b73d-a75fd649284f",
+      "id": "2b3e4eb7-31fb-4ce4-8a5b-85e2ff486272",
       "accountId": 1,
-      "date": "2026-02-24",
-      "balance_cents": -261001,
-      "note": "Parcela 1/10 - Geladeira"
+      "date": "2026-02-25",
+      "balance_cents": 14988,
+      "note": "Transacao"
     },
     {
-      "id": "28f79604-b3ca-47d8-b6d4-dd589a1b15a9",
+      "id": "5c417a1e-74b6-497e-9950-1c27cfc0f2e1",
       "accountId": 1,
-      "date": "2026-02-24",
-      "balance_cents": 88999,
-      "note": "Estorno parcela 1/10 - Geladeira"
+      "date": "2026-02-25",
+      "balance_cents": 14002,
+      "note": "Transacao"
     },
     {
-      "id": "98af984a-dfd1-41e1-a92a-464a7db3b77e",
+      "id": "2fa958f4-ba09-4b9a-bdb1-70bfef1a6be8",
       "accountId": 1,
-      "date": "2026-02-24",
-      "balance_cents": -261001,
-      "note": "Parcela 1/10 - Geladeira"
+      "date": "2026-02-25",
+      "balance_cents": 13973,
+      "note": "Transacao"
     },
     {
-      "id": "1eda65f8-2414-4b56-b438-dcaf5057cf47",
+      "id": "0345589f-1160-4c28-a837-d8f9656b2939",
       "accountId": 1,
-      "date": "2026-02-24",
-      "balance_cents": 88999,
-      "note": "Estorno parcela 1/10 - Geladeira"
+      "date": "2026-02-25",
+      "balance_cents": 11507,
+      "note": "Transacao"
     },
     {
-      "id": "78aca98d-a98a-4e6d-bd2d-6e70ad9b3c44",
+      "id": "a57acbf9-580f-4d46-8e54-f0ffd0bed0d4",
       "accountId": 1,
-      "date": "2026-02-24",
-      "balance_cents": -261001,
-      "note": "Parcela 1/10 - Geladeira"
+      "date": "2026-02-25",
+      "balance_cents": -23048,
+      "note": "Transacao"
     },
     {
-      "id": "4b46efae-6f21-485d-895b-78aee58c7c03",
+      "id": "25c5bebe-e3f5-45ab-b8d6-7afe7c6b7851",
       "accountId": 1,
-      "date": "2026-02-24",
-      "balance_cents": 88999,
-      "note": "Estorno parcela 1/10 - Geladeira"
+      "date": "2026-02-25",
+      "balance_cents": -32810,
+      "note": "Transacao"
     },
     {
-      "id": "1d478c47-e323-44a6-a346-2de7accc1652",
+      "id": "438d23f5-76fd-4e38-b855-ecc8a343c285",
       "accountId": 1,
-      "date": "2026-02-24",
-      "balance_cents": -261001,
-      "note": "Parcela 1/10 - Geladeira"
+      "date": "2026-02-25",
+      "balance_cents": -52810,
+      "note": "Transacao"
     },
     {
-      "id": "64240825-052c-40ca-b4c0-6adbab6470d6",
+      "id": "2626b45d-2660-4d4c-a98b-a7120b9d2765",
       "accountId": 1,
-      "date": "2026-02-24",
-      "balance_cents": 88999,
-      "note": "Estorno parcela 1/10 - Geladeira"
+      "date": "2026-02-25",
+      "balance_cents": -102810,
+      "note": "5"
     },
     {
-      "id": "5b10abc5-9f11-46eb-ac23-93ac4873e7a1",
+      "id": "7285abbe-6c40-4647-b12e-3f48c8fb50bd",
       "accountId": 1,
-      "date": "2026-02-24",
-      "balance_cents": 58412,
-      "note": "Parcela 1/10 - Geladeira"
+      "date": "2026-02-25",
+      "balance_cents": -152810,
+      "note": "Transacao"
     },
     {
-      "id": "26fef78d-12a3-4d70-9fee-cb59787a346d",
+      "id": "7162f8ae-70c0-43db-831c-045b21a1ab65",
       "accountId": 1,
-      "date": "2026-02-24",
-      "balance_cents": 27825,
-      "note": "Parcela 2/10 - Geladeira"
-    },
-    {
-      "id": "cf702ac7-cd04-4eff-9741-1eb33edf86ec",
-      "accountId": 1,
-      "date": "2026-02-24",
-      "balance_cents": 58412,
-      "note": "Estorno parcela 2/10 - Geladeira"
-    },
-    {
-      "id": "46d7f2eb-00a7-4410-83cc-fc1c0f84a37b",
-      "accountId": 1,
-      "date": "2026-02-24",
-      "balance_cents": 27825,
-      "note": "Parcela 3/10 - Geladeira"
-    },
-    {
-      "id": "75ce005f-863a-448b-867d-48a1f4eaa680",
-      "accountId": 1,
-      "date": "2026-02-24",
-      "balance_cents": 58412,
-      "note": "Estorno parcela 3/10 - Geladeira"
-    },
-    {
-      "id": "fb910034-d423-42b1-94bf-89aee74f6fca",
-      "accountId": 1,
-      "date": "2026-02-24",
-      "balance_cents": 27825,
-      "note": "Parcela 4/10 - Geladeira"
-    },
-    {
-      "id": "5b3955ba-71a7-4a73-857a-6aa4aa31761b",
-      "accountId": 1,
-      "date": "2026-02-24",
-      "balance_cents": 58412,
-      "note": "Estorno parcela 4/10 - Geladeira"
-    },
-    {
-      "id": "70696800-2fa3-49d5-a7d5-aad65349409e",
-      "accountId": 1,
-      "date": "2026-02-24",
-      "balance_cents": 88999,
-      "note": "Estorno parcela 1/10 - Geladeira"
-    },
-    {
-      "id": "9f7b7810-cb76-4698-9569-8fa6b9bc0f15",
-      "accountId": 1,
-      "date": "2026-02-24",
-      "balance_cents": 58412,
-      "note": "Parcela 1/10 - Geladeira"
-    },
-    {
-      "id": "00067be4-9549-4a92-bfd0-b74c3b8769f2",
-      "accountId": 1,
-      "date": "2026-02-24",
-      "balance_cents": 88999,
-      "note": "Estorno parcela 1/10 - Geladeira"
-    },
-    {
-      "id": "1da68a02-787f-42ac-b6e4-a0b3f8cce94c",
-      "accountId": 1,
-      "date": "2026-02-24",
-      "balance_cents": 58412,
-      "note": "Parcela 1/10 - Geladeira"
+      "date": "2026-02-25",
+      "balance_cents": 347190,
+      "note": "Transacao"
     }
   ]
 }

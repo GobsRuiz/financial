@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Save, AlertCircleIcon } from 'lucide-vue-next'
-import { Alert, AlertDescription } from '../ui/alert'
+import { Save } from 'lucide-vue-next'
 import type { Account } from '~/schemas/zod-schemas'
+import { useAppToast } from '~/composables/useAppToast'
 import { useAccountsStore } from '~/stores/useAccounts'
 import { parseBRLToCents } from '~/utils/money'
 
@@ -12,10 +12,10 @@ const props = defineProps<{
 const emit = defineEmits<{ saved: [] }>()
 
 const accountsStore = useAccountsStore()
+const appToast = useAppToast()
 
 const isEdit = computed(() => !!props.account)
 const loading = ref(false)
-const error = ref('')
 
 const form = reactive({
   bank: '',
@@ -75,17 +75,22 @@ function resetForm() {
   form.balance = ''
   form.card_closing_day = ''
   form.card_due_day = ''
-  error.value = ''
   lastAutoLabel.value = ''
   hasManualLabelEdit.value = false
 }
 
 async function handleSubmit() {
-  if (!form.bank.trim()) { error.value = 'Informe o banco'; return }
-  if (!form.label.trim()) { error.value = 'Informe o nome da conta'; return }
+  if (!form.bank.trim()) {
+    appToast.error({ title: 'Erro ao salvar conta', description: 'Informe o banco' })
+    return
+  }
+
+  if (!form.label.trim()) {
+    appToast.error({ title: 'Erro ao salvar conta', description: 'Informe o nome da conta' })
+    return
+  }
 
   loading.value = true
-  error.value = ''
 
   try {
     const data = {
@@ -103,10 +108,14 @@ async function handleSubmit() {
       await accountsStore.addAccount(data)
     }
 
+    appToast.success({ title: isEdit.value ? 'Conta atualizada' : 'Conta criada' })
     resetForm()
     emit('saved')
   } catch (e: any) {
-    error.value = e.message || 'Erro ao salvar'
+    appToast.error({
+      title: 'Erro ao salvar conta',
+      description: e?.message || 'Ocorreu um erro ao salvar a conta.',
+    })
   } finally {
     loading.value = false
   }
@@ -141,11 +150,6 @@ async function handleSubmit() {
         <Input v-model="form.card_due_day" placeholder="1-31" type="number" min="1" max="31" />
       </div>
     </div>
-
-    <Alert v-if="error" variant="destructive">
-      <AlertCircleIcon class="size-4" />
-      <AlertDescription>{{ error }}</AlertDescription>
-    </Alert>
 
     <Button type="submit" :disabled="loading" class="w-full">
       <Save class="h-4 w-4 mr-2" />

@@ -13,6 +13,8 @@ const emit = defineEmits<{
 const tagsStore = useTagsStore()
 const inputValue = ref('')
 const open = ref(false)
+const inputRef = ref<{ $el?: HTMLElement } | null>(null)
+const dropdownStyle = ref<Record<string, string>>({})
 
 const availableTags = computed(() =>
   tagsStore.tags
@@ -37,6 +39,19 @@ const showDropdown = computed(() => {
   return open.value && (filteredTags.value.length > 0 || showNew.value || inputValue.value.trim() === '')
 })
 
+function updateDropdownPosition() {
+  const el = inputRef.value?.$el ?? inputRef.value
+  if (!(el instanceof HTMLElement)) return
+  const rect = el.getBoundingClientRect()
+  dropdownStyle.value = {
+    position: 'fixed',
+    top: `${rect.bottom + 4}px`,
+    left: `${rect.left}px`,
+    width: `${rect.width}px`,
+    zIndex: '9999',
+  }
+}
+
 async function addTag(name: string) {
   await tagsStore.ensureTag(name)
   emit('update:modelValue', [...props.modelValue, name.toLowerCase().trim()])
@@ -48,6 +63,7 @@ function removeTag(name: string) {
 }
 
 function onFocus() {
+  updateDropdownPosition()
   open.value = true
 }
 
@@ -92,9 +108,10 @@ function onKeydown(e: KeyboardEvent) {
       </Badge>
     </div>
 
-    <!-- Input + dropdown manual -->
-    <div class="relative">
+    <!-- Input + dropdown via Teleport -->
+    <div>
       <Input
+        ref="inputRef"
         v-model="inputValue"
         placeholder="Digite para buscar ou criar tag..."
         class="h-8 text-sm"
@@ -103,44 +120,47 @@ function onKeydown(e: KeyboardEvent) {
         @keydown="onKeydown"
       />
 
-      <div
-        v-if="showDropdown"
-        class="absolute top-full left-0 z-50 mt-1 w-full rounded-md border bg-popover text-popover-foreground shadow-md"
-      >
-        <div class="max-h-[200px] overflow-y-auto p-1">
-          <!-- Tags existentes filtradas -->
-          <button
-            v-for="tag in filteredTags"
-            :key="tag"
-            type="button"
-            class="flex w-full items-center rounded-sm px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
-            @mousedown.prevent
-            @click="addTag(tag)"
-          >
-            {{ tag }}
-          </button>
+      <Teleport to="body">
+        <div
+          v-if="showDropdown"
+          :style="dropdownStyle"
+          class="rounded-md border bg-popover text-popover-foreground shadow-md"
+        >
+          <div class="max-h-[200px] overflow-y-auto p-1">
+            <!-- Tags existentes filtradas -->
+            <button
+              v-for="tag in filteredTags"
+              :key="tag"
+              type="button"
+              class="flex w-full items-center rounded-sm px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground"
+              @mousedown.prevent
+              @click="addTag(tag)"
+            >
+              {{ tag }}
+            </button>
 
-          <!-- Criar nova tag -->
-          <button
-            v-if="showNew"
-            type="button"
-            class="flex w-full items-center gap-2 rounded-sm px-3 py-1.5 text-sm text-primary hover:bg-accent hover:text-accent-foreground"
-            @mousedown.prevent
-            @click="addTag(inputValue.trim())"
-          >
-            <Plus class="h-3.5 w-3.5" />
-            Criar "{{ inputValue.trim() }}"
-          </button>
+            <!-- Criar nova tag -->
+            <button
+              v-if="showNew"
+              type="button"
+              class="flex w-full items-center gap-2 rounded-sm px-3 py-1.5 text-sm text-primary hover:bg-accent hover:text-accent-foreground"
+              @mousedown.prevent
+              @click="addTag(inputValue.trim())"
+            >
+              <Plus class="h-3.5 w-3.5" />
+              Criar "{{ inputValue.trim() }}"
+            </button>
 
-          <!-- Mensagem quando não há tags e input vazio -->
-          <p
-            v-if="!filteredTags.length && !showNew"
-            class="px-3 py-2 text-sm text-muted-foreground"
-          >
-            Digite para criar uma tag
-          </p>
+            <!-- Mensagem quando não há tags e input vazio -->
+            <p
+              v-if="!filteredTags.length && !showNew"
+              class="px-3 py-2 text-sm text-muted-foreground"
+            >
+              Digite para criar uma tag
+            </p>
+          </div>
         </div>
-      </div>
+      </Teleport>
     </div>
   </div>
 </template>

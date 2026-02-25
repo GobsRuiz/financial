@@ -2,21 +2,24 @@
 import { ArrowLeftRight, Plus } from 'lucide-vue-next'
 import type { Transaction, Recurrent } from '~/schemas/zod-schemas'
 import { useAccountsStore } from '~/stores/useAccounts'
-import { useTagsStore } from '~/stores/useTags'
 import { useTransactionsStore } from '~/stores/useTransactions'
 import { useRecurrentsStore } from '~/stores/useRecurrents'
 import { useInvestmentPositionsStore } from '~/stores/useInvestmentPositions'
 import { useInvestmentEventsStore } from '~/stores/useInvestmentEvents'
 
 const accountsStore = useAccountsStore()
-const tagsStore = useTagsStore()
 const transactionsStore = useTransactionsStore()
 const recurrentsStore = useRecurrentsStore()
 const investmentPositionsStore = useInvestmentPositionsStore()
 const investmentEventsStore = useInvestmentEventsStore()
 
+type MovimentacoesTab = 'transacoes' | 'recorrentes' | 'investimentos'
+type MovimentacaoTipo = 'transacao' | 'recorrente' | 'investimento'
+
 const dialogOpen = ref(false)
 const loading = ref(true)
+const selectedListTab = ref<MovimentacoesTab>('transacoes')
+const defaultNewType = ref<MovimentacaoTipo>('transacao')
 
 // Estado de edição
 const editingTransaction = ref<Transaction | null>(null)
@@ -32,7 +35,6 @@ onMounted(async () => {
   try {
     await Promise.all([
       accountsStore.loadAccounts(),
-      tagsStore.loadTags(),
       transactionsStore.loadTransactions(),
       recurrentsStore.loadRecurrents(),
       investmentPositionsStore.loadPositions(),
@@ -46,7 +48,16 @@ onMounted(async () => {
 function openNew() {
   editingTransaction.value = null
   editingRecurrent.value = null
+  defaultNewType.value = selectedListTab.value === 'recorrentes'
+    ? 'recorrente'
+    : selectedListTab.value === 'investimentos'
+      ? 'investimento'
+      : 'transacao'
   dialogOpen.value = true
+}
+
+function onTabChange(tab: MovimentacoesTab) {
+  selectedListTab.value = tab
 }
 
 function onEditTransaction(tx: Transaction) {
@@ -89,6 +100,7 @@ function onSaved() {
           <MovimentacaoForm
             :edit-transaction="editingTransaction"
             :edit-recurrent="editingRecurrent"
+            :default-type="defaultNewType"
             @saved="onSaved"
           />
         </DialogContent>
@@ -118,6 +130,7 @@ function onSaved() {
       v-else
       @edit-transaction="onEditTransaction"
       @edit-recurrent="onEditRecurrent"
+      @tab-change="onTabChange"
     />
   </div>
 </template>

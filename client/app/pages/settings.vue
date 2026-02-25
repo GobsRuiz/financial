@@ -5,7 +5,6 @@ import { useAccountsStore } from '~/stores/useAccounts'
 import { useTransactionsStore } from '~/stores/useTransactions'
 import { useRecurrentsStore } from '~/stores/useRecurrents'
 import { useInvestmentsStore } from '~/stores/useInvestments'
-import { useTagsStore } from '~/stores/useTags'
 import { useHistoryStore } from '~/stores/useHistory'
 import { useInvestmentPositionsStore } from '~/stores/useInvestmentPositions'
 import { useInvestmentEventsStore } from '~/stores/useInvestmentEvents'
@@ -15,7 +14,6 @@ const accountsStore = useAccountsStore()
 const transactionsStore = useTransactionsStore()
 const recurrentsStore = useRecurrentsStore()
 const investmentsStore = useInvestmentsStore()
-const tagsStore = useTagsStore()
 const historyStore = useHistoryStore()
 const investmentPositionsStore = useInvestmentPositionsStore()
 const investmentEventsStore = useInvestmentEventsStore()
@@ -34,7 +32,6 @@ async function handleClearAll() {
       { items: investmentsStore.investments, path: '/investments' },
       { items: investmentPositionsStore.positions, path: '/investment_positions' },
       { items: investmentEventsStore.events, path: '/investment_events' },
-      { items: tagsStore.tags, path: '/tags' },
       { items: historyStore.history, path: '/history' },
       { items: accountsStore.accounts, path: '/accounts' },
     ]
@@ -50,7 +47,6 @@ async function handleClearAll() {
     investmentsStore.investments = []
     investmentPositionsStore.positions = []
     investmentEventsStore.events = []
-    tagsStore.tags = []
     historyStore.history = []
     accountsStore.accounts = []
 
@@ -90,7 +86,7 @@ async function handleClearAll() {
           <div>
             <p class="font-medium">Limpar todos os dados</p>
             <p class="text-sm text-muted-foreground">
-              Remove todas as contas, transações, recorrentes, investimentos, tags e histórico.
+              Remove todas as contas, transações, recorrentes, investimentos e histórico.
             </p>
           </div>
           <Button
@@ -110,7 +106,7 @@ async function handleClearAll() {
     <ConfirmDialog
       :open="confirmOpen"
       title="Limpar todos os dados?"
-      description="Esta ação é irreversível. Todos os dados (contas, transações, recorrentes, investimentos, tags e histórico) serão permanentemente removidos."
+      description="Esta ação é irreversível. Todos os dados (contas, transações, recorrentes, investimentos e histórico) serão permanentemente removidos."
       confirm-label="Sim, limpar tudo"
       cancel-label="Cancelar"
       :destructive="true"

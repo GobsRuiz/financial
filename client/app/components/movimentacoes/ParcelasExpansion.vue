@@ -46,7 +46,7 @@ async function togglePaid(tx: Transaction, checked: boolean | 'indeterminate') {
       </div>
       <div class="flex items-center gap-2">
         <span :class="p.amount_cents < 0 ? 'text-red-500' : 'text-green-500'">
-          {{ formatCentsToBRL(Math.abs(p.amount_cents)) }}
+          {{ formatCentsToBRL(p.amount_cents) }}
         </span>
         <Check v-if="p.paid" class="h-3.5 w-3.5 text-green-500" />
       </div>

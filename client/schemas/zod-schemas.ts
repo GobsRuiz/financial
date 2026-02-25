@@ -21,16 +21,18 @@ export const installmentSchema = z.object({
   product: z.string().min(1, 'Produto é obrigatório'),
 })
 
+// ── Payment Method ──
+export const paymentMethodSchema = z.enum(['debit', 'credit'])
+
 // ── Transaction ──
 export const transactionSchema = z.object({
   id: z.string().uuid().optional(),
   accountId: z.number().int({ message: 'Conta é obrigatória' }),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida (YYYY-MM-DD)'),
   type: z.enum(['expense', 'income', 'transfer'], { message: 'Tipo é obrigatório' }),
-  category: z.string().min(1, 'Categoria é obrigatória'),
+  payment_method: paymentMethodSchema.optional(),
   amount_cents: z.number().int(),
   description: z.string().optional(),
-  tags: z.array(z.string()).optional(),
   paid: z.boolean().default(false),
   installment: installmentSchema.nullable().optional(),
   recurrentId: z.string().uuid().optional(),
@@ -42,7 +44,9 @@ export type Transaction = z.infer<typeof transactionSchema> & { id: string }
 export const recurrentSchema = z.object({
   id: z.string().uuid().optional(),
   accountId: z.number().int({ message: 'Conta é obrigatória' }),
-  kind: z.enum(['income', 'expense', 'benefit'], { message: 'Tipo é obrigatório' }),
+  kind: z.enum(['income', 'expense'], { message: 'Tipo é obrigatório' }),
+  payment_method: paymentMethodSchema.optional(),
+  notify: z.boolean().default(false),
   name: z.string().min(1, 'Nome é obrigatório'),
   amount_cents: z.number().int(),
   frequency: z.literal('monthly'),
@@ -210,3 +214,4 @@ export const investmentEventSchema = z.object({
 })
 
 export type InvestmentEvent = z.infer<typeof investmentEventSchema> & { id: string }
+

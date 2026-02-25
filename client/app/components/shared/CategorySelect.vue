@@ -30,8 +30,8 @@ watch(() => props.modelValue, (val) => {
 const existingCategories = computed(() => {
   const cats = new Set<string>()
   for (const tx of transactionsStore.transactions) {
-    if (tx.category) {
-      cats.add(capitalize(tx.category))
+    if (tx.description) {
+      cats.add(capitalize(tx.description))
     }
   }
   return [...cats].sort()
@@ -142,3 +142,4 @@ function onKeydown(e: KeyboardEvent) {
     </div>
   </div>
 </template>
+

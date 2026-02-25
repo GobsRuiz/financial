@@ -92,22 +92,31 @@ export const useInvestmentEventsStore = defineStore('investment-events', () => {
     }
 
     let principalCents = 0
+    let totalCents = 0
 
     for (const event of positionEvents) {
       if (event.event_type === 'contribution') {
         principalCents += event.amount_cents
+        totalCents += event.amount_cents
+        continue
+      }
+      if (event.event_type === 'income') {
+        totalCents += event.amount_cents
         continue
       }
       if (event.event_type === 'withdrawal' || event.event_type === 'maturity') {
         principalCents -= event.amount_cents
+        totalCents -= event.amount_cents
         continue
       }
     }
 
     const normalizedPrincipal = Math.max(0, principalCents)
+    const normalizedTotal = Math.max(0, totalCents)
     await positionsStore.updatePosition(positionId, {
       principal_cents: normalizedPrincipal,
-      invested_cents: normalizedPrincipal,
+      current_value_cents: normalizedTotal,
+      invested_cents: normalizedTotal,
     })
   }
 
