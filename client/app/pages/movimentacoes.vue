@@ -12,9 +12,16 @@ const transactionsStore = useTransactionsStore()
 const recurrentsStore = useRecurrentsStore()
 const investmentPositionsStore = useInvestmentPositionsStore()
 const investmentEventsStore = useInvestmentEventsStore()
+const route = useRoute()
+const router = useRouter()
 
 type MovimentacoesTab = 'transacoes' | 'recorrentes' | 'investimentos'
 type MovimentacaoTipo = 'transacao' | 'recorrente' | 'investimento'
+
+interface MovimentacoesListExpose {
+  focusTransaction: (txId: string) => boolean | Promise<boolean>
+  focusRecurrent: (recId: string) => boolean | Promise<boolean>
+}
 
 const dialogOpen = ref(false)
 const loading = ref(true)
@@ -23,6 +30,7 @@ const loadFailedSources = ref<string[]>([])
 const hasSuccessfulLoad = ref(false)
 const selectedListTab = ref<MovimentacoesTab>('transacoes')
 const defaultNewType = ref<MovimentacaoTipo>('transacao')
+const movimentacoesListRef = ref<MovimentacoesListExpose | null>(null)
 
 const sourceLoaders = [
   { label: 'contas', load: () => accountsStore.loadAccounts() },
@@ -45,6 +53,22 @@ const dialogTitle = computed(() => {
 onMounted(async () => {
   await loadPageData()
 })
+
+function parseTabQuery(value: unknown): MovimentacoesTab | null {
+  if (typeof value !== 'string') return null
+  if (value === 'transacoes' || value === 'recorrentes' || value === 'investimentos') return value
+  return null
+}
+
+function parseStringQuery(value: unknown): string | null {
+  if (typeof value === 'string' && value.trim()) return value
+  if (Array.isArray(value) && typeof value[0] === 'string' && value[0].trim()) return value[0]
+  return null
+}
+
+const routeSelectedTab = computed<MovimentacoesTab>(() =>
+  parseTabQuery(route.query.tab) ?? 'transacoes',
+)
 
 const hasFatalLoadError = computed(() =>
   loadFailedSources.value.length === sourceLoaders.length && !hasSuccessfulLoad.value,
@@ -95,6 +119,33 @@ async function loadPageData() {
   }
 }
 
+async function applyRouteFocusFromQuery() {
+  if (loading.value) return
+  if (!movimentacoesListRef.value) return
+
+  const txId = parseStringQuery(route.query.txId)
+  const recId = parseStringQuery(route.query.recId)
+  if (!txId && !recId) return
+
+  await nextTick()
+
+  let focused = false
+  if (txId) {
+    focused = !!(await movimentacoesListRef.value.focusTransaction(txId))
+  } else if (recId) {
+    focused = !!(await movimentacoesListRef.value.focusRecurrent(recId))
+  }
+  if (!focused) return
+
+  const nextQuery = { ...route.query }
+  delete nextQuery.txId
+  delete nextQuery.recId
+
+  await router.replace({ query: nextQuery }).catch((error) => {
+    console.error('Erro ao limpar query de busca global em movimentacoes:', error)
+  })
+}
+
 function openNew() {
   editingTransaction.value = null
   editingRecurrent.value = null
@@ -125,6 +176,15 @@ function onEditRecurrent(rec: Recurrent) {
 function onSaved() {
   dialogOpen.value = false
 }
+
+watch(
+  () => [route.query.tab, route.query.txId, route.query.recId, loading.value],
+  () => {
+    if (loading.value) return
+    void applyRouteFocusFromQuery()
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -206,6 +266,8 @@ function onSaved() {
       </Card>
 
       <MovimentacoesList
+        ref="movimentacoesListRef"
+        :initial-tab="routeSelectedTab"
         @edit-transaction="onEditTransaction"
         @edit-recurrent="onEditRecurrent"
         @tab-change="onTabChange"

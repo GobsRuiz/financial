@@ -9,7 +9,10 @@ const props = defineProps<{
   account?: Account | null
 }>()
 
-const emit = defineEmits<{ saved: [] }>()
+const emit = defineEmits<{
+  saved: []
+  processing: [value: boolean]
+}>()
 
 const accountsStore = useAccountsStore()
 const appToast = useAppToast()
@@ -80,6 +83,7 @@ function resetForm() {
 }
 
 async function handleSubmit() {
+  if (loading.value) return
   if (!form.bank.trim()) {
     appToast.error({ title: 'Erro ao salvar conta', description: 'Informe o banco' })
     return
@@ -91,6 +95,7 @@ async function handleSubmit() {
   }
 
   loading.value = true
+  emit('processing', true)
 
   try {
     const data = {
@@ -118,6 +123,7 @@ async function handleSubmit() {
     })
   } finally {
     loading.value = false
+    emit('processing', false)
   }
 }
 </script>
@@ -127,32 +133,33 @@ async function handleSubmit() {
     <div class="grid grid-cols-2 gap-4">
       <div class="space-y-2">
         <Label>Banco *</Label>
-        <Input v-model="form.bank" placeholder="Ex: nubank" />
+        <Input v-model="form.bank" :disabled="loading" placeholder="Ex: nubank" />
       </div>
 
       <div class="space-y-2">
         <Label>Nome da Conta *</Label>
-        <Input v-model="form.label" placeholder="Ex: Nubank Principal" />
+        <Input v-model="form.label" :disabled="loading" placeholder="Ex: Nubank Principal" />
       </div>
 
       <div class="space-y-2">
         <Label>Saldo</Label>
-        <MoneyInput v-model="form.balance" />
+        <MoneyInput v-model="form.balance" :disabled="loading" />
       </div>
 
       <div class="space-y-2">
         <Label>Dia Fechamento Fatura</Label>
-        <Input v-model="form.card_closing_day" placeholder="1-31" type="number" min="1" max="31" />
+        <Input v-model="form.card_closing_day" :disabled="loading" placeholder="1-31" type="number" min="1" max="31" />
       </div>
 
       <div class="space-y-2">
         <Label>Dia Vencimento Fatura</Label>
-        <Input v-model="form.card_due_day" placeholder="1-31" type="number" min="1" max="31" />
+        <Input v-model="form.card_due_day" :disabled="loading" placeholder="1-31" type="number" min="1" max="31" />
       </div>
     </div>
 
     <Button type="submit" :disabled="loading" class="w-full">
-      <Save class="h-4 w-4 mr-2" />
+      <Spinner v-if="loading" class="h-4 w-4 mr-2" />
+      <Save v-else class="h-4 w-4 mr-2" />
       {{ loading ? 'Salvando...' : (isEdit ? 'Atualizar' : 'Criar Conta') }}
     </Button>
   </form>

@@ -1,6 +1,19 @@
 <script setup lang="ts">
 import dayjs from 'dayjs'
 import {
+  ArcElement,
+  BarController,
+  BarElement,
+  CategoryScale,
+  Chart as ChartJS,
+  Legend,
+  LineController,
+  LineElement,
+  LinearScale,
+  PointElement,
+  Tooltip,
+} from 'chart.js'
+import {
   ArrowDownRight,
   ArrowUpRight,
   BellRing,
@@ -14,6 +27,8 @@ import {
   TrendingDown,
   TrendingUp,
 } from 'lucide-vue-next'
+import type { ChartData, ChartOptions, TooltipItem } from 'chart.js'
+import { Bar, Doughnut, Line } from 'vue-chartjs'
 import type { AlertBucket, AlertItem } from '~/composables/useAlerts'
 import { useAlerts } from '~/composables/useAlerts'
 import { useAccountsStore } from '~/stores/useAccounts'
@@ -25,6 +40,20 @@ import { monthKey } from '~/utils/dates'
 import { formatCentsToBRL } from '~/utils/money'
 
 const monthFormatter = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' })
+const monthShortFormatter = new Intl.DateTimeFormat('pt-BR', { month: 'short' })
+
+ChartJS.register(
+  ArcElement,
+  BarController,
+  BarElement,
+  CategoryScale,
+  Legend,
+  LineController,
+  LineElement,
+  LinearScale,
+  PointElement,
+  Tooltip,
+)
 
 type DashboardTx = {
   id: string
@@ -726,6 +755,363 @@ const investmentPeriodDescription = computed(() => {
   return 'Todo o historico'
 })
 
+const chartTickColor = '#a1a1aa'
+const chartGridColor = 'rgba(161, 161, 170, 0.2)'
+const chartLegendColor = '#d4d4d8'
+
+function formatAxisCurrency(cents: number): string {
+  const abs = Math.abs(cents)
+  if (abs >= 100000000) return `R$ ${(cents / 100000000).toFixed(1)}M`
+  if (abs >= 100000) return `R$ ${(cents / 100000).toFixed(1)}K`
+  return formatCentsToBRL(cents)
+}
+
+function monthLabelFromKey(month: string): string {
+  const [year = '0000', monthValue = '01'] = month.split('-')
+  const date = new Date(Number(year), Number(monthValue) - 1, 1)
+  const monthLabel = monthShortFormatter.format(date).replace('.', '')
+  return `${monthLabel}/${year.slice(2)}`
+}
+
+const flowChartMonths = computed(() => {
+  const end = dayjs(`${selectedMonth.value}-01`)
+  return Array.from({ length: 6 }, (_item, index) =>
+    end.subtract(5 - index, 'month').format('YYYY-MM'),
+  )
+})
+
+const flowChartData = computed<ChartData<'bar'>>(() => ({
+  labels: flowChartMonths.value.map(monthLabelFromKey),
+  datasets: [
+    {
+      label: 'Entradas',
+      data: flowChartMonths.value.map(month => entriesForMonth(month)),
+      backgroundColor: 'rgba(34, 197, 94, 0.85)',
+      borderRadius: 6,
+      maxBarThickness: 32,
+    },
+    {
+      label: 'Saidas',
+      data: flowChartMonths.value.map(month => expensesForMonth(month)),
+      backgroundColor: 'rgba(239, 68, 68, 0.85)',
+      borderRadius: 6,
+      maxBarThickness: 32,
+    },
+  ],
+}))
+
+const flowChartHasData = computed(() =>
+  flowChartData.value.datasets.some(dataset =>
+    (dataset.data as number[]).some(value => value > 0),
+  ),
+)
+
+const flowChartOptions = computed<ChartOptions<'bar'>>(() => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  interaction: {
+    mode: 'index',
+    intersect: false,
+  },
+  plugins: {
+    legend: {
+      labels: { color: chartLegendColor },
+    },
+    tooltip: {
+      callbacks: {
+        label: (context: TooltipItem<'bar'>) =>
+          `${context.dataset.label}: ${formatCentsToBRL(Number(context.parsed.y ?? 0))}`,
+      },
+    },
+  },
+  scales: {
+    x: {
+      grid: { display: false },
+      ticks: {
+        color: chartTickColor,
+      },
+    },
+    y: {
+      beginAtZero: true,
+      ticks: {
+        color: chartTickColor,
+        callback: value => formatAxisCurrency(Number(value)),
+      },
+      grid: {
+        color: chartGridColor,
+      },
+    },
+  },
+}))
+
+const spendingByType = computed(() => {
+  let debit = 0
+  let credit = 0
+  let transfer = 0
+
+  for (const tx of monthTransactions.value) {
+    if (tx.type === 'transfer') {
+      transfer += Math.abs(tx.amount_cents)
+      continue
+    }
+
+    if (tx.amount_cents >= 0) continue
+
+    const amount = Math.abs(tx.amount_cents)
+    if (tx.payment_method === 'credit') {
+      credit += amount
+      continue
+    }
+
+    debit += amount
+  }
+
+  return {
+    debit,
+    credit,
+    transfer,
+    total: debit + credit + transfer,
+  }
+})
+
+const typeChartData = computed<ChartData<'doughnut'>>(() => ({
+  labels: ['Debito', 'Credito', 'Transferencia'],
+  datasets: [
+    {
+      data: [
+        spendingByType.value.debit,
+        spendingByType.value.credit,
+        spendingByType.value.transfer,
+      ],
+      backgroundColor: [
+        'rgba(59, 130, 246, 0.85)',
+        'rgba(239, 68, 68, 0.85)',
+        'rgba(14, 165, 233, 0.85)',
+      ],
+      borderColor: ['#1e40af', '#991b1b', '#0c4a6e'],
+      borderWidth: 1,
+      hoverOffset: 6,
+    },
+  ],
+}))
+
+const typeChartHasData = computed(() => spendingByType.value.total > 0)
+
+const typeChartOptions = computed<ChartOptions<'doughnut'>>(() => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      position: 'bottom',
+      labels: { color: chartLegendColor },
+    },
+    tooltip: {
+      callbacks: {
+        label: (context: TooltipItem<'doughnut'>) => {
+          const value = Number(context.parsed ?? 0)
+          const percentage = percentOf(value, spendingByType.value.total)
+          return `${context.label}: ${formatCentsToBRL(value)} (${percentage})`
+        },
+      },
+    },
+  },
+}))
+
+const statusChartData = computed<ChartData<'bar'>>(() => ({
+  labels: [selectedMonthLabel.value],
+  datasets: [
+    {
+      label: 'Pago',
+      data: [expensePaymentStatus.value.paidCents],
+      backgroundColor: 'rgba(34, 197, 94, 0.85)',
+      borderRadius: 6,
+      stack: 'status',
+      maxBarThickness: 60,
+    },
+    {
+      label: 'Pendente',
+      data: [expensePaymentStatus.value.pendingCents],
+      backgroundColor: 'rgba(245, 158, 11, 0.9)',
+      borderRadius: 6,
+      stack: 'status',
+      maxBarThickness: 60,
+    },
+  ],
+}))
+
+const statusChartHasData = computed(() => expensePaymentStatus.value.totalCents > 0)
+
+const statusChartOptions = computed<ChartOptions<'bar'>>(() => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      labels: { color: chartLegendColor },
+    },
+    tooltip: {
+      callbacks: {
+        label: (context: TooltipItem<'bar'>) =>
+          `${context.dataset.label}: ${formatCentsToBRL(Number(context.parsed.y ?? 0))}`,
+      },
+    },
+  },
+  scales: {
+    x: {
+      stacked: true,
+      grid: { display: false },
+      ticks: { color: chartTickColor },
+    },
+    y: {
+      stacked: true,
+      beginAtZero: true,
+      ticks: {
+        color: chartTickColor,
+        callback: value => formatAxisCurrency(Number(value)),
+      },
+      grid: { color: chartGridColor },
+    },
+  },
+}))
+
+function investmentFlowDelta(event: DashboardInvestmentEvent): number {
+  const amount = Math.abs(event.amount_cents)
+  if (event.event_type === 'sell' || event.event_type === 'withdrawal' || event.event_type === 'maturity') {
+    return -amount
+  }
+  return amount
+}
+
+type InvestmentEvolutionPoint = {
+  label: string
+  valueCents: number
+}
+
+const investmentEvolutionPoints = computed<InvestmentEvolutionPoint[]>(() => {
+  const events = [...investmentEventsForPeriod.value]
+    .sort((a, b) => (a.date.localeCompare(b.date) || a.id.localeCompare(b.id)))
+
+  if (!events.length) return []
+
+  if (investmentPeriodTab.value === 'month') {
+    const baseDate = dayjs(`${selectedMonth.value}-01`)
+    const daysInMonth = baseDate.daysInMonth()
+    const deltasByDate = new Map<string, number>()
+
+    for (const event of events) {
+      const key = event.date.slice(0, 10)
+      deltasByDate.set(key, (deltasByDate.get(key) ?? 0) + investmentFlowDelta(event))
+    }
+
+    let cumulative = 0
+    return Array.from({ length: daysInMonth }, (_item, index) => {
+      const day = index + 1
+      const date = baseDate.date(day)
+      const key = date.format('YYYY-MM-DD')
+      cumulative += deltasByDate.get(key) ?? 0
+      return {
+        label: date.format('DD/MM'),
+        valueCents: cumulative,
+      }
+    })
+  }
+
+  const deltasByMonth = new Map<string, number>()
+  for (const event of events) {
+    const month = event.date.slice(0, 7)
+    deltasByMonth.set(month, (deltasByMonth.get(month) ?? 0) + investmentFlowDelta(event))
+  }
+
+  if (investmentPeriodTab.value === 'year') {
+    const year = selectedYear.value
+    let cumulative = 0
+
+    return Array.from({ length: 12 }, (_item, index) => {
+      const month = `${year}-${String(index + 1).padStart(2, '0')}`
+      cumulative += deltasByMonth.get(month) ?? 0
+      return {
+        label: monthLabelFromKey(month),
+        valueCents: cumulative,
+      }
+    })
+  }
+
+  const sortedMonths = [...deltasByMonth.keys()].sort((a, b) => a.localeCompare(b))
+  if (!sortedMonths.length) return []
+
+  const firstMonth = dayjs(`${sortedMonths[0]}-01`)
+  const lastMonth = dayjs(`${sortedMonths[sortedMonths.length - 1]}-01`)
+  const totalMonths = Math.max(1, lastMonth.diff(firstMonth, 'month') + 1)
+
+  let cumulative = 0
+  return Array.from({ length: totalMonths }, (_item, index) => {
+    const month = firstMonth.add(index, 'month').format('YYYY-MM')
+    cumulative += deltasByMonth.get(month) ?? 0
+    return {
+      label: monthLabelFromKey(month),
+      valueCents: cumulative,
+    }
+  })
+})
+
+const investmentEvolutionChartData = computed<ChartData<'line'>>(() => ({
+  labels: investmentEvolutionPoints.value.map(point => point.label),
+  datasets: [
+    {
+      label: 'Valor investido acumulado',
+      data: investmentEvolutionPoints.value.map(point => point.valueCents),
+      borderColor: 'rgba(59, 130, 246, 0.95)',
+      backgroundColor: 'rgba(59, 130, 246, 0.20)',
+      borderWidth: 2,
+      tension: 0.3,
+      fill: true,
+      pointRadius: 2,
+      pointHoverRadius: 4,
+    },
+  ],
+}))
+
+const investmentEvolutionChartHasData = computed(() =>
+  investmentEvolutionPoints.value.some(point => point.valueCents !== 0),
+)
+
+const investmentEvolutionChartOptions = computed<ChartOptions<'line'>>(() => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  interaction: {
+    mode: 'index',
+    intersect: false,
+  },
+  plugins: {
+    legend: {
+      labels: { color: chartLegendColor },
+    },
+    tooltip: {
+      callbacks: {
+        label: (context: TooltipItem<'line'>) =>
+          `${context.dataset.label}: ${formatCentsToBRL(Number(context.parsed.y ?? 0))}`,
+      },
+    },
+  },
+  scales: {
+    x: {
+      grid: { display: false },
+      ticks: {
+        color: chartTickColor,
+        autoSkip: true,
+        maxTicksLimit: investmentPeriodTab.value === 'month' ? 8 : 12,
+      },
+    },
+    y: {
+      beginAtZero: true,
+      ticks: {
+        color: chartTickColor,
+        callback: value => formatAxisCurrency(Number(value)),
+      },
+      grid: { color: chartGridColor },
+    },
+  },
+}))
+
 function investmentEventTypeLabel(eventType: DashboardInvestmentEvent['event_type']): string {
   if (eventType === 'buy') return 'Compra'
   if (eventType === 'sell') return 'Venda'
@@ -1126,26 +1512,9 @@ function txDateLabel(isoDate: string): string {
 
               <TabsContent value="flow" class="space-y-3">
                 <div class="rounded-lg border border-border/70 bg-muted/20 p-4">
-                  <template v-if="hasFlowData">
-                    <div class="grid h-56 items-end gap-3" :style="flowColumnsStyle">
-                      <div
-                        v-for="item in flowByWeek"
-                        :key="item.label"
-                        class="flex h-full min-w-0 flex-col justify-end"
-                        :title="flowTooltip(item)"
-                      >
-                        <div class="flex flex-1 items-end justify-center gap-1">
-                          <div
-                            class="w-3 rounded-md bg-emerald-500/80 transition-all"
-                            :style="{ height: flowBarHeight(item.inCents), opacity: item.inCents ? 1 : 0.25 }"
-                          />
-                          <div
-                            class="w-3 rounded-md bg-red-500/80 transition-all"
-                            :style="{ height: flowBarHeight(item.outCents), opacity: item.outCents ? 1 : 0.25 }"
-                          />
-                        </div>
-                        <p class="mt-2 text-center text-[11px] text-muted-foreground">{{ item.label }}</p>
-                      </div>
+                  <template v-if="flowChartHasData">
+                    <div class="h-64">
+                      <Bar :data="flowChartData" :options="flowChartOptions" />
                     </div>
                   </template>
 
@@ -1171,24 +1540,35 @@ function txDateLabel(isoDate: string): string {
               </TabsContent>
 
               <TabsContent value="type" class="space-y-3">
-                <div v-if="transactionTypeBreakdown.total > 0" class="space-y-3">
-                  <div
-                    v-for="item in transactionTypeItems"
-                    :key="item.key"
-                    class="rounded-md border border-border/60 bg-muted/20 px-3 py-3"
-                  >
-                    <div class="mb-2 flex items-center justify-between text-sm">
-                      <span class="text-muted-foreground">{{ item.label }}</span>
-                      <span class="font-medium">
-                        {{ percentOf(item.value, transactionTypeBreakdown.total) }} - {{ formatCentsToBRL(item.value) }}
-                      </span>
+                <div v-if="typeChartHasData" class="grid grid-cols-1 gap-4 md:grid-cols-[260px_1fr] md:items-center">
+                  <div class="mx-auto h-56 w-full max-w-[260px]">
+                    <Doughnut :data="typeChartData" :options="typeChartOptions" />
+                  </div>
+
+                  <div class="space-y-2">
+                    <div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-sm">
+                      <div class="mb-1 flex items-center justify-between">
+                        <span class="text-muted-foreground">Debito</span>
+                        <span class="font-medium">
+                          {{ percentOf(spendingByType.debit, spendingByType.total) }} - {{ formatCentsToBRL(spendingByType.debit) }}
+                        </span>
+                      </div>
                     </div>
-                    <div class="h-2 rounded-full bg-muted/60">
-                      <div
-                        class="h-2 rounded-full transition-all"
-                        :class="item.color"
-                        :style="{ width: progressWidth(item.value, transactionTypeBreakdown.total) }"
-                      />
+                    <div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-sm">
+                      <div class="mb-1 flex items-center justify-between">
+                        <span class="text-muted-foreground">Credito</span>
+                        <span class="font-medium">
+                          {{ percentOf(spendingByType.credit, spendingByType.total) }} - {{ formatCentsToBRL(spendingByType.credit) }}
+                        </span>
+                      </div>
+                    </div>
+                    <div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-sm">
+                      <div class="mb-1 flex items-center justify-between">
+                        <span class="text-muted-foreground">Transferencia</span>
+                        <span class="font-medium">
+                          {{ percentOf(spendingByType.transfer, spendingByType.total) }} - {{ formatCentsToBRL(spendingByType.transfer) }}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1199,26 +1579,23 @@ function txDateLabel(isoDate: string): string {
               </TabsContent>
 
               <TabsContent value="status" class="space-y-3">
-                <div v-if="expensePaymentStatus.totalCents > 0" class="space-y-3">
-                  <div
-                    v-for="item in expensePaymentItems"
-                    :key="item.key"
-                    class="rounded-md border border-border/60 bg-muted/20 px-3 py-3"
-                  >
-                    <div class="mb-2 flex items-center justify-between text-sm">
-                      <span class="text-muted-foreground">
-                        {{ item.label }} ({{ item.count }})
-                      </span>
-                      <span class="font-medium">
-                        {{ percentOf(item.value, expensePaymentStatus.totalCents) }} - {{ formatCentsToBRL(-item.value) }}
+                <div v-if="statusChartHasData" class="space-y-3">
+                  <div class="h-64 rounded-md border border-border/60 bg-muted/20 p-3">
+                    <Bar :data="statusChartData" :options="statusChartOptions" />
+                  </div>
+
+                  <div class="grid grid-cols-1 gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                    <div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+                      Pago:
+                      <span class="font-semibold text-emerald-400">
+                        {{ percentOf(expensePaymentStatus.paidCents, expensePaymentStatus.totalCents) }} - {{ formatCentsToBRL(expensePaymentStatus.paidCents) }}
                       </span>
                     </div>
-                    <div class="h-2 rounded-full bg-muted/60">
-                      <div
-                        class="h-2 rounded-full transition-all"
-                        :class="item.color"
-                        :style="{ width: progressWidth(item.value, expensePaymentStatus.totalCents) }"
-                      />
+                    <div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+                      Pendente:
+                      <span class="font-semibold text-yellow-500">
+                        {{ percentOf(expensePaymentStatus.pendingCents, expensePaymentStatus.totalCents) }} - {{ formatCentsToBRL(expensePaymentStatus.pendingCents) }}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -1328,28 +1705,27 @@ function txDateLabel(isoDate: string): string {
 
               <div class="rounded-lg border border-border/70 bg-muted/20 p-4">
                 <div class="mb-3 flex items-center justify-between">
-                  <p class="text-sm font-medium">Fluxo por tipo no periodo</p>
+                  <p class="text-sm font-medium">Evolucao do valor investido</p>
                   <span class="text-xs text-muted-foreground">{{ investmentPeriodSummary.eventCount }} lancamento(s)</span>
                 </div>
 
-                <div v-if="investmentPeriodSummary.totalFlowCents > 0" class="space-y-3">
-                  <div
-                    v-for="item in investmentPeriodItems"
-                    :key="item.key"
-                    class="rounded-md border border-border/60 bg-background/40 px-3 py-3"
-                  >
-                    <div class="mb-2 flex items-center justify-between text-sm">
-                      <span class="text-muted-foreground">{{ item.label }}</span>
-                      <span class="font-medium">
-                        {{ percentOf(item.value, investmentPeriodSummary.totalFlowCents) }} - {{ formatCentsToBRL(item.value) }}
-                      </span>
+                <div v-if="investmentEvolutionPoints.length" class="space-y-3">
+                  <div class="h-64 rounded-md border border-border/60 bg-background/40 p-3">
+                    <Line :data="investmentEvolutionChartData" :options="investmentEvolutionChartOptions" />
+                  </div>
+
+                  <div class="grid grid-cols-1 gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+                    <div class="rounded-md border border-border/60 bg-background/40 px-3 py-2">
+                      Aportes e compras:
+                      <span class="font-semibold text-blue-500">{{ formatCentsToBRL(investmentPeriodSummary.incomingCents) }}</span>
                     </div>
-                    <div class="h-2 rounded-full bg-muted/60">
-                      <div
-                        class="h-2 rounded-full transition-all"
-                        :class="item.color"
-                        :style="{ width: progressWidth(item.value, investmentPeriodSummary.totalFlowCents) }"
-                      />
+                    <div class="rounded-md border border-border/60 bg-background/40 px-3 py-2">
+                      Rendimentos:
+                      <span class="font-semibold text-emerald-400">{{ formatCentsToBRL(investmentPeriodSummary.incomeCents) }}</span>
+                    </div>
+                    <div class="rounded-md border border-border/60 bg-background/40 px-3 py-2">
+                      Saidas e resgates:
+                      <span class="font-semibold text-red-500">{{ formatCentsToBRL(investmentPeriodSummary.outgoingCents) }}</span>
                     </div>
                   </div>
                 </div>

@@ -30,17 +30,21 @@ function isActive(to: string) {
   <div class="appSidebar">
     <Sidebar collapsible="icon">
       <SidebarHeader class="p-4">
-        <SidebarMenuButton size="lg" as-child>
-          <NuxtLink to="/">
-            <div class="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Wallet class="size-4" />
-            </div>
-            <div class="grid flex-1 text-left text-sm leading-tight">
-              <span class="truncate font-semibold">Financeiro</span>
-              <span class="truncate text-xs text-muted-foreground">Controle pessoal</span>
-            </div>
-          </NuxtLink>
-        </SidebarMenuButton>
+        <div class="flex items-center gap-2">
+          <SidebarMenuButton size="lg" as-child class="min-w-0 flex-1">
+            <NuxtLink to="/">
+              <div class="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                <Wallet class="size-4" />
+              </div>
+              <div class="grid flex-1 text-left text-sm leading-tight">
+                <span class="truncate font-semibold">Financeiro</span>
+                <span class="truncate text-xs text-muted-foreground">Controle pessoal</span>
+              </div>
+            </NuxtLink>
+          </SidebarMenuButton>
+
+          <SidebarTrigger class="h-8 w-8 shrink-0" />
+        </div>
       </SidebarHeader>
   
       <SidebarContent>
@@ -52,6 +56,7 @@ function isActive(to: string) {
                 <SidebarMenuButton
                   as-child
                   :data-active="isActive(item.to)"
+                  :tooltip="item.label"
                 >
                   <NuxtLink :to="item.to">
                     <component :is="item.icon" />

@@ -29,8 +29,6 @@ function init(userDataPath, isDev, resourcesPath) {
           accounts: [],
           transactions: [],
           recurrents: [],
-          investments: [],
-          tags: [],
           history: [],
         }
         fs.writeFileSync(dbPath, JSON.stringify(emptyDB, null, 2), 'utf-8')

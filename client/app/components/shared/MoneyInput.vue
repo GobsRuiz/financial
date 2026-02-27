@@ -5,6 +5,7 @@ import type { HTMLAttributes } from 'vue'
 const props = defineProps<{
   modelValue?: string
   placeholder?: string
+  disabled?: boolean
   class?: HTMLAttributes['class']
 }>()
 
@@ -36,6 +37,7 @@ function onInput(event: Event) {
       :value="displayValue"
       inputmode="numeric"
       :placeholder="placeholder ?? '0,00'"
+      :disabled="props.disabled"
       data-slot="input"
       :class="cn(
         'file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input h-9 w-full min-w-0 rounded-md border bg-transparent pl-9 pr-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',

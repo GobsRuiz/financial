@@ -4,6 +4,7 @@ import { v4 as uuid } from 'uuid'
 import type { InvestmentEvent } from '~/schemas/zod-schemas'
 import { apiGet, apiPost, apiPatch, apiDelete } from '~/utils/api'
 import { useInvestmentPositionsStore } from './useInvestmentPositions'
+import { useAccountsStore } from './useAccounts'
 
 export const useInvestmentEventsStore = defineStore('investment-events', () => {
   const events = ref<InvestmentEvent[]>([])
@@ -25,6 +26,10 @@ export const useInvestmentEventsStore = defineStore('investment-events', () => {
     })
     events.value.push(created)
     await recomputePosition(created.positionId)
+
+    // Ajustar saldo da conta: compra/aporte debita, venda/resgate/vencimento credita
+    await adjustAccountForEvent(created)
+
     return created
   }
 
@@ -41,6 +46,10 @@ export const useInvestmentEventsStore = defineStore('investment-events', () => {
       await recomputePosition(positionId)
     }
 
+    // Reverter saldo do evento antigo e aplicar o novo
+    if (original) await adjustAccountForEvent(original, true)
+    await adjustAccountForEvent(updated)
+
     return updated
   }
 
@@ -48,7 +57,11 @@ export const useInvestmentEventsStore = defineStore('investment-events', () => {
     const event = events.value.find(e => e.id === id)
     await apiDelete(`/investment_events/${id}`)
     events.value = events.value.filter(e => e.id !== id)
-    if (event) await recomputePosition(event.positionId)
+    if (event) {
+      await recomputePosition(event.positionId)
+      // Reverter ajuste de saldo
+      await adjustAccountForEvent(event, true)
+    }
   }
 
   async function recomputePosition(positionId: string) {
@@ -118,6 +131,37 @@ export const useInvestmentEventsStore = defineStore('investment-events', () => {
       current_value_cents: normalizedTotal,
       invested_cents: normalizedTotal,
     })
+  }
+
+  /**
+   * Ajusta saldo da conta vinculada ao evento.
+   * - buy/contribution: debita (saiu dinheiro da conta)
+   * - sell/withdrawal/maturity: credita (dinheiro voltou para conta)
+   * - income: nenhum ajuste (rendimento fica no ativo)
+   * Se reverse=true, inverte o sinal (usado ao excluir evento).
+   */
+  async function adjustAccountForEvent(event: InvestmentEvent, reverse = false) {
+    const { event_type, amount_cents, accountId } = event
+    let delta = 0
+
+    if (event_type === 'buy' || event_type === 'contribution') {
+      delta = -amount_cents // debita da conta
+    } else if (event_type === 'sell' || event_type === 'withdrawal' || event_type === 'maturity') {
+      delta = amount_cents // credita na conta
+    }
+
+    if (delta === 0) return
+
+    if (reverse) delta = -delta
+
+    const accountsStore = useAccountsStore()
+    const label = event_type === 'buy' ? 'Compra investimento'
+      : event_type === 'sell' ? 'Venda investimento'
+      : event_type === 'contribution' ? 'Aporte investimento'
+      : event_type === 'withdrawal' ? 'Resgate investimento'
+      : 'Vencimento investimento'
+
+    await accountsStore.adjustBalance(accountId, delta, label)
   }
 
   return {

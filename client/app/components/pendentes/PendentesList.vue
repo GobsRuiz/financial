@@ -14,6 +14,7 @@ import type { Transaction, Recurrent } from '~/schemas/zod-schemas'
 import { useTransactionsStore } from '~/stores/useTransactions'
 import { useRecurrentsStore } from '~/stores/useRecurrents'
 import { useAccountsStore } from '~/stores/useAccounts'
+import { useAppToast } from '~/composables/useAppToast'
 import { formatCentsToBRL } from '~/utils/money'
 import { monthKey } from '~/utils/dates'
 
@@ -33,6 +34,7 @@ type FaturaGroup = {
 const transactionsStore = useTransactionsStore()
 const recurrentsStore = useRecurrentsStore()
 const accountsStore = useAccountsStore()
+const appToast = useAppToast()
 
 const viewMode = ref<ViewMode>('open')
 const filtersOpen = ref(false)
@@ -41,6 +43,9 @@ const filterTipo = ref<'todos' | 'fatura' | 'transacao' | 'recorrente'>('todos')
 
 const expandedFaturas = ref<Set<number>>(new Set())
 const payingId = ref<string | null>(null)
+const recentlyPaidIds = ref<Set<string>>(new Set())
+const paidHighlightTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const isProcessing = computed(() => payingId.value !== null)
 
 const actionButtonBaseClass = 'w-[132px] justify-center gap-1.5'
 const paidActionButtonClass = `${actionButtonBaseClass} text-green-500 border-green-500/30 hover:bg-transparent disabled:opacity-100 disabled:cursor-default`
@@ -199,6 +204,7 @@ const emptyMessage = computed(() => {
 })
 
 function toggleFatura(accountId: number) {
+  if (isProcessing.value) return
   const next = new Set(expandedFaturas.value)
   if (next.has(accountId)) next.delete(accountId)
   else next.add(accountId)
@@ -233,35 +239,106 @@ function getRecurrentLabel(rec: Recurrent, loading: boolean) {
   return loading ? 'Pagando...' : 'Pagar'
 }
 
+function faturaVisualId(accountId: number): string {
+  return `fatura-${accountId}`
+}
+
+function markRecentlyPaid(id: string) {
+  const next = new Set(recentlyPaidIds.value)
+  next.add(id)
+  recentlyPaidIds.value = next
+
+  const existingTimer = paidHighlightTimers.get(id)
+  if (existingTimer) {
+    clearTimeout(existingTimer)
+  }
+
+  const timer = setTimeout(() => {
+    const after = new Set(recentlyPaidIds.value)
+    after.delete(id)
+    recentlyPaidIds.value = after
+    paidHighlightTimers.delete(id)
+  }, 1400)
+
+  paidHighlightTimers.set(id, timer)
+}
+
+onBeforeUnmount(() => {
+  for (const timer of paidHighlightTimers.values()) {
+    clearTimeout(timer)
+  }
+  paidHighlightTimers.clear()
+})
+
 function clearFilters() {
+  if (isProcessing.value) return
   filterConta.value = null
   filterTipo.value = 'todos'
 }
 
 async function payFatura(fatura: FaturaGroup) {
+  if (isProcessing.value) return
   const openTransactions = fatura.transactions.filter(tx => !tx.paid)
   if (!openTransactions.length) return
   payingId.value = `fatura-${fatura.accountId}`
   try {
-    for (const tx of openTransactions) await transactionsStore.markPaid(tx.id)
+    for (const tx of openTransactions) {
+      await transactionsStore.markPaid(tx.id)
+      markRecentlyPaid(tx.id)
+    }
+    markRecentlyPaid(faturaVisualId(fatura.accountId))
+    appToast.success({
+      title: 'Fatura paga',
+      description: `${openTransactions.length} compra(s) marcada(s) como paga(s).`,
+    })
+  } catch (e: any) {
+    appToast.error({
+      title: 'Erro ao pagar fatura',
+      description: e?.message || 'Nao foi possivel concluir o pagamento da fatura.',
+    })
   } finally {
     payingId.value = null
   }
 }
 
 async function payTransaction(tx: Transaction) {
+  if (isProcessing.value) return
   payingId.value = tx.id
   try {
     await transactionsStore.markPaid(tx.id)
+    markRecentlyPaid(tx.id)
+    appToast.success({
+      title: 'Pagamento confirmado',
+      description: `${getTxLabel(tx)} marcado como pago.`,
+    })
+  } catch (e: any) {
+    appToast.error({
+      title: 'Erro ao pagar transacao',
+      description: e?.message || 'Nao foi possivel concluir o pagamento.',
+    })
   } finally {
     payingId.value = null
   }
 }
 
 async function payRecurrent(rec: Recurrent) {
+  if (isProcessing.value) return
   payingId.value = rec.id
   try {
-    await transactionsStore.payRecurrent(rec, props.month)
+    const tx = await transactionsStore.payRecurrent(rec, props.month)
+    markRecentlyPaid(rec.id)
+    if (tx?.id) {
+      markRecentlyPaid(tx.id)
+    }
+    appToast.success({
+      title: rec.kind === 'income' ? 'Recebimento confirmado' : 'Pagamento confirmado',
+      description: `${rec.name} lancado com sucesso.`,
+    })
+  } catch (e: any) {
+    appToast.error({
+      title: 'Erro ao lancar recorrente',
+      description: e?.message || 'Nao foi possivel lancar a recorrente.',
+    })
   } finally {
     payingId.value = null
   }
@@ -269,7 +346,11 @@ async function payRecurrent(rec: Recurrent) {
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="relative">
+    <div
+      class="space-y-4 transition-opacity"
+      :class="isProcessing ? 'pointer-events-none opacity-60' : ''"
+    >
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <Card>
         <CardContent class="pt-6">
@@ -302,6 +383,7 @@ async function payRecurrent(rec: Recurrent) {
             :key="opt.value"
             size="sm"
             :variant="viewMode === opt.value ? 'secondary' : 'outline'"
+            :disabled="isProcessing"
             @click="viewMode = opt.value"
           >
             {{ opt.label }}
@@ -356,7 +438,14 @@ async function payRecurrent(rec: Recurrent) {
             </TableHeader>
             <TableBody>
               <template v-for="fatura in faturasFiltered" :key="fatura.accountId">
-                <TableRow class="cursor-pointer" @click="toggleFatura(fatura.accountId)">
+                <TableRow
+                  class="cursor-pointer transition-all duration-300"
+                  :class="[
+                    recentlyPaidIds.has(faturaVisualId(fatura.accountId)) ? 'bg-emerald-500/10' : '',
+                    fatura.openCents === 0 ? 'opacity-75' : '',
+                  ]"
+                  @click="toggleFatura(fatura.accountId)"
+                >
                   <TableCell>
                     <button type="button" class="text-muted-foreground" @click.stop="toggleFatura(fatura.accountId)">
                       <ChevronDown v-if="expandedFaturas.has(fatura.accountId)" class="h-4 w-4" />
@@ -376,23 +465,40 @@ async function payRecurrent(rec: Recurrent) {
                       variant="outline"
                       :class="paidActionButtonClass"
                       disabled
-                    ><Check class="h-3.5 w-3.5" />Pago</Button>
+                    ><Check class="h-3.5 w-3.5 transition-all duration-300" :class="recentlyPaidIds.has(faturaVisualId(fatura.accountId)) ? 'scale-110 text-emerald-400' : ''" />Pago</Button>
                     <Button
                       v-else
                       size="sm"
                       variant="outline"
                       :class="actionButtonBaseClass"
-                      :disabled="payingId === `fatura-${fatura.accountId}`"
+                      :disabled="isProcessing"
                       @click.stop="payFatura(fatura)"
-                    ><Check class="h-3.5 w-3.5" />{{ getFaturaActionLabel(fatura) }}</Button>
+                    >
+                      <Spinner v-if="payingId === `fatura-${fatura.accountId}`" class="h-3.5 w-3.5" />
+                      <Check v-else class="h-3.5 w-3.5" />
+                      {{ getFaturaActionLabel(fatura) }}
+                    </Button>
                   </TableCell>
                 </TableRow>
                 <TableRow v-if="expandedFaturas.has(fatura.accountId)" :key="`${fatura.accountId}-expand`">
                   <TableCell colspan="8" class="p-0 pt-0 pb-2">
                     <div class="space-y-1 pl-4 border-l-2 border-border ml-2">
-                      <div v-for="tx in getFaturaVisibleTransactions(fatura)" :key="tx.id" class="flex items-center justify-between py-1.5 px-3 rounded text-sm hover:bg-muted/30">
+                      <div
+                        v-for="tx in getFaturaVisibleTransactions(fatura)"
+                        :key="tx.id"
+                        class="flex items-center justify-between py-1.5 px-3 rounded text-sm transition-all duration-300"
+                        :class="[
+                          tx.paid ? 'bg-muted/50 opacity-70' : 'hover:bg-muted/30',
+                          recentlyPaidIds.has(tx.id) ? 'bg-emerald-500/10 ring-1 ring-emerald-500/40' : '',
+                        ]"
+                      >
                         <div class="flex items-center gap-3">
-                          <span>{{ getTxLabel(tx) }}</span>
+                          <span
+                            class="transition-all duration-300"
+                            :class="tx.paid ? 'line-through text-muted-foreground' : ''"
+                          >
+                            {{ getTxLabel(tx) }}
+                          </span>
                           <span class="text-muted-foreground text-xs">{{ tx.date }}</span>
                           <Badge
                             v-if="viewMode === 'all' && tx.paid"
@@ -427,10 +533,23 @@ async function payRecurrent(rec: Recurrent) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <TableRow v-for="tx in transacoesDebito" :key="tx.id" :class="{ 'opacity-60': tx.paid }">
+                <TableRow
+                  v-for="tx in transacoesDebito"
+                  :key="tx.id"
+                  class="transition-all duration-300"
+                  :class="[
+                    tx.paid ? 'opacity-60' : '',
+                    recentlyPaidIds.has(tx.id) ? 'bg-emerald-500/10' : '',
+                  ]"
+                >
                   <TableCell class="font-medium truncate">
                     <div class="flex items-center gap-2">
-                      <span>{{ getTxLabel(tx) }}</span>
+                      <span
+                        class="transition-all duration-300"
+                        :class="tx.paid ? 'line-through text-muted-foreground' : ''"
+                      >
+                        {{ getTxLabel(tx) }}
+                      </span>
                       <Badge
                         v-if="viewMode === 'all' && tx.paid"
                         variant="outline"
@@ -444,8 +563,18 @@ async function payRecurrent(rec: Recurrent) {
                   <TableCell>{{ tx.date }}</TableCell>
                   <TableCell class="text-right text-red-500">{{ formatCentsToBRL(Math.abs(tx.amount_cents)) }}</TableCell>
                   <TableCell class="text-right">
-                    <Button v-if="tx.paid" size="sm" variant="outline" :class="paidActionButtonClass" disabled><Check class="h-3.5 w-3.5" />Pago</Button>
-                    <Button v-else size="sm" variant="outline" :class="actionButtonBaseClass" :disabled="payingId === tx.id" @click.stop="payTransaction(tx)"><Check class="h-3.5 w-3.5" />{{ payingId === tx.id ? 'Pagando...' : 'Pagar' }}</Button>
+                    <Button
+                      v-if="tx.paid"
+                      size="sm"
+                      variant="outline"
+                      :class="paidActionButtonClass"
+                      disabled
+                    ><Check class="h-3.5 w-3.5 transition-all duration-300" :class="recentlyPaidIds.has(tx.id) ? 'scale-110 text-emerald-400' : ''" />Pago</Button>
+                    <Button v-else size="sm" variant="outline" :class="actionButtonBaseClass" :disabled="isProcessing" @click.stop="payTransaction(tx)">
+                      <Spinner v-if="payingId === tx.id" class="h-3.5 w-3.5" />
+                      <Check v-else class="h-3.5 w-3.5" />
+                      {{ payingId === tx.id ? 'Pagando...' : 'Pagar' }}
+                    </Button>
                   </TableCell>
                 </TableRow>
               </TableBody>
@@ -474,7 +603,11 @@ async function payRecurrent(rec: Recurrent) {
                   <TableCell>{{ (rec.due_day ?? rec.day_of_month) ? `Dia ${rec.due_day ?? rec.day_of_month}` : '-' }}</TableCell>
                   <TableCell class="text-right" :class="rec.amount_cents < 0 ? 'text-red-500' : 'text-green-500'">{{ formatCentsToBRL(Math.abs(rec.amount_cents)) }}</TableCell>
                   <TableCell class="text-right">
-                    <Button size="sm" variant="outline" :class="actionButtonBaseClass" :disabled="payingId === rec.id" @click.stop="payRecurrent(rec)"><Check class="h-3.5 w-3.5" />{{ getRecurrentLabel(rec, payingId === rec.id) }}</Button>
+                    <Button size="sm" variant="outline" :class="actionButtonBaseClass" :disabled="isProcessing" @click.stop="payRecurrent(rec)">
+                      <Spinner v-if="payingId === rec.id" class="h-3.5 w-3.5" />
+                      <Check v-else class="h-3.5 w-3.5" />
+                      {{ getRecurrentLabel(rec, payingId === rec.id) }}
+                    </Button>
                   </TableCell>
                 </TableRow>
               </TableBody>
@@ -485,5 +618,12 @@ async function payRecurrent(rec: Recurrent) {
         <p v-if="!hasAnyResult" class="text-center text-muted-foreground py-8">{{ emptyMessage }}</p>
       </CardContent>
     </Card>
+    </div>
+    <div
+      v-if="isProcessing"
+      class="absolute inset-0 z-20 grid place-items-center rounded-lg bg-background/45 backdrop-blur-[1px]"
+    >
+      <Spinner class="h-5 w-5" />
+    </div>
   </div>
 </template>

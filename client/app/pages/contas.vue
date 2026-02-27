@@ -1,12 +1,16 @@
 ﻿<script setup lang="ts">
-import { Landmark, Plus, Pencil } from 'lucide-vue-next'
+import { Landmark, Plus, Pencil, Trash2 } from 'lucide-vue-next'
 import type { Account } from '~/schemas/zod-schemas'
+import { useAppToast } from '~/composables/useAppToast'
 import { useAccountsStore } from '~/stores/useAccounts'
+import { useRecurrentsStore } from '~/stores/useRecurrents'
 import { useTransactionsStore } from '~/stores/useTransactions'
 import { formatCentsToBRL } from '~/utils/money'
 
 const accountsStore = useAccountsStore()
 const transactionsStore = useTransactionsStore()
+const recurrentsStore = useRecurrentsStore()
+const appToast = useAppToast()
 
 const loading = ref(true)
 const refreshing = ref(false)
@@ -14,10 +18,16 @@ const loadFailedSources = ref<string[]>([])
 const hasSuccessfulLoad = ref(false)
 const dialogOpen = ref(false)
 const editingAccount = ref<Account | null>(null)
+const deleteConfirmOpen = ref(false)
+const deleting = ref(false)
+const deleteTarget = ref<Account | null>(null)
+const accountFormProcessing = ref(false)
+const isProcessing = computed(() => deleting.value || accountFormProcessing.value)
 
 const sourceLoaders = [
   { label: 'contas', load: () => accountsStore.loadAccounts() },
   { label: 'movimentacoes', load: () => transactionsStore.loadTransactions() },
+  { label: 'recorrentes', load: () => recurrentsStore.loadRecurrents() },
 ]
 
 onMounted(async () => {
@@ -90,11 +100,13 @@ function getCreditInvoiceCents(accountId: number) {
 }
 
 function openNew() {
+  if (isProcessing.value) return
   editingAccount.value = null
   dialogOpen.value = true
 }
 
 function openEdit(acc: Account) {
+  if (isProcessing.value) return
   editingAccount.value = acc
   dialogOpen.value = true
 }
@@ -102,30 +114,124 @@ function openEdit(acc: Account) {
 function onSaved() {
   dialogOpen.value = false
   editingAccount.value = null
+  accountFormProcessing.value = false
+}
+
+function onDialogOpenChange(open: boolean) {
+  if (!open && accountFormProcessing.value) return
+  dialogOpen.value = open
+  if (!open) {
+    editingAccount.value = null
+  }
+}
+
+function onAccountFormProcessing(value: boolean) {
+  accountFormProcessing.value = value
+}
+
+function getLinkedTransactionsCount(accountId: number) {
+  return transactionsStore.transactions.filter(tx =>
+    tx.accountId === accountId || tx.destinationAccountId === accountId,
+  ).length
+}
+
+function getLinkedRecurrentsCount(accountId: number) {
+  return recurrentsStore.recurrents.filter(rec => rec.accountId === accountId).length
+}
+
+const deleteTxCount = computed(() =>
+  deleteTarget.value ? getLinkedTransactionsCount(deleteTarget.value.id) : 0,
+)
+
+const deleteRecCount = computed(() =>
+  deleteTarget.value ? getLinkedRecurrentsCount(deleteTarget.value.id) : 0,
+)
+
+const deleteDescription = computed(() => {
+  if (!deleteTarget.value) return 'Esta acao e irreversivel.'
+
+  const warnings: string[] = []
+  if (deleteTxCount.value > 0) {
+    warnings.push(`Esta conta possui ${deleteTxCount.value} transacao(oes) vinculada(s).`)
+  }
+  if (deleteRecCount.value > 0) {
+    warnings.push(`Tambem possui ${deleteRecCount.value} recorrente(s) vinculada(s).`)
+  }
+
+  if (!warnings.length) {
+    return 'Deseja excluir esta conta? Esta acao e irreversivel.'
+  }
+
+  return `${warnings.join(' ')} Deseja excluir tudo? Esta acao e irreversivel.`
+})
+
+function requestDelete(acc: Account) {
+  if (isProcessing.value) return
+  deleteTarget.value = acc
+  deleteConfirmOpen.value = true
+}
+
+function cancelDeleteAccount() {
+  if (isProcessing.value) return
+  deleteConfirmOpen.value = false
+  deleteTarget.value = null
+}
+
+async function confirmDeleteAccount() {
+  if (!deleteTarget.value || deleting.value) return
+  deleting.value = true
+
+  const accountId = deleteTarget.value.id
+
+  try {
+    const deleted = await accountsStore.deleteAccount(accountId)
+    transactionsStore.transactions = transactionsStore.transactions.filter(tx =>
+      tx.accountId !== accountId && tx.destinationAccountId !== accountId,
+    )
+    recurrentsStore.recurrents = recurrentsStore.recurrents.filter(rec => rec.accountId !== accountId)
+
+    appToast.success({
+      title: 'Conta excluida',
+      description: `${deleted.transactionsDeleted} transacao(oes), ${deleted.recurrentsDeleted} recorrente(s) e ${deleted.historyDeleted} historico(s) removidos.`,
+    })
+  } catch (e: any) {
+    appToast.error({
+      title: 'Erro ao excluir conta',
+      description: e?.message || 'Nao foi possivel excluir a conta.',
+    })
+  } finally {
+    deleting.value = false
+    deleteConfirmOpen.value = false
+    deleteTarget.value = null
+  }
 }
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="relative space-y-6">
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-3">
         <Landmark class="h-6 w-6 text-muted-foreground" />
         <h1 class="text-2xl font-bold">Contas</h1>
       </div>
 
-      <Dialog v-model:open="dialogOpen">
+      <Dialog :open="dialogOpen" @update:open="onDialogOpenChange">
         <DialogTrigger as-child>
-          <Button @click="openNew">
+          <Button :disabled="isProcessing" @click="openNew">
             <Plus class="h-4 w-4 mr-2" />
             Nova Conta
           </Button>
         </DialogTrigger>
-        <DialogContent class="max-w-lg">
+        <DialogContent class="max-w-lg" :show-close-button="!accountFormProcessing">
           <DialogHeader>
             <DialogTitle>{{ editingAccount ? 'Editar Conta' : 'Nova Conta' }}</DialogTitle>
             <DialogDescription>Preencha os dados da conta bancária</DialogDescription>
           </DialogHeader>
-          <AccountFormModal :account="editingAccount" @saved="onSaved" />
+          <AccountFormModal
+            :account="editingAccount"
+            @saved="onSaved"
+            @processing="onAccountFormProcessing"
+          />
         </DialogContent>
       </Dialog>
     </div>
@@ -149,7 +255,7 @@ function onSaved() {
           <p class="text-sm text-muted-foreground">
             {{ loadErrorMessage || 'Verifique o servidor/API e tente novamente.' }}
           </p>
-          <Button :disabled="refreshing" @click="loadPageData">
+          <Button :disabled="refreshing || isProcessing" @click="loadPageData">
             {{ refreshing ? 'Tentando novamente...' : 'Tentar novamente' }}
           </Button>
         </CardContent>
@@ -165,7 +271,7 @@ function onSaved() {
           <p class="text-sm text-muted-foreground">
             {{ loadErrorMessage }} Alguns dados podem estar incompletos.
           </p>
-          <Button variant="outline" :disabled="refreshing" @click="loadPageData">
+          <Button variant="outline" :disabled="refreshing || isProcessing" @click="loadPageData">
             {{ refreshing ? 'Atualizando...' : 'Tentar novamente' }}
           </Button>
         </CardContent>
@@ -183,9 +289,20 @@ function onSaved() {
                 <p class="font-semibold text-base">{{ acc.label }}</p>
                 <p class="text-xs text-muted-foreground">{{ acc.bank }}</p>
               </div>
-              <Button variant="ghost" size="icon" @click="openEdit(acc)">
-                <Pencil class="h-4 w-4" />
-              </Button>
+              <div class="flex items-center gap-1">
+                <Button variant="ghost" size="icon" :disabled="isProcessing" @click="openEdit(acc)">
+                  <Pencil class="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="text-red-500 hover:text-red-500"
+                  :disabled="isProcessing"
+                  @click="requestDelete(acc)"
+                >
+                  <Trash2 class="h-4 w-4" />
+                </Button>
+              </div>
             </div>
 
             <div
@@ -227,5 +344,23 @@ function onSaved() {
         </CardContent>
       </Card>
     </template>
+
+    <ConfirmDialog
+      :open="deleteConfirmOpen"
+      title="Excluir conta?"
+      :description="deleteDescription"
+      confirm-label="Sim, excluir conta"
+      cancel-label="Cancelar"
+      :loading="deleting"
+      :destructive="true"
+      @confirm="confirmDeleteAccount"
+      @cancel="cancelDeleteAccount"
+    />
+    <div
+      v-if="isProcessing"
+      class="absolute inset-0 z-20 grid place-items-center rounded-lg bg-background/45 backdrop-blur-[1px]"
+    >
+      <Spinner class="h-5 w-5" />
+    </div>
   </div>
 </template>

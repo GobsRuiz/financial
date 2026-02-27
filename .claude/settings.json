@@ -8,7 +8,9 @@
       "Bash(npx nuxt generate)",
       "WebFetch(domain:vue-sonner.vercel.app)",
       "Read(//c/MyFiles/**)",
-      "WebFetch(domain:www.radix-vue.com)"
+      "WebFetch(domain:www.radix-vue.com)",
+      "Bash(npx nuxi typecheck)",
+      "Bash(npx nuxi build)"
     ]
   }
 }

@@ -26,6 +26,7 @@ const eventsStore = useInvestmentEventsStore()
 const appToast = useAppToast()
 
 const isEdit = computed(() => !!props.editTransaction || !!props.editRecurrent)
+const isEditingPaidTransaction = computed(() => !!props.editTransaction?.paid)
 
 const tipoMovimentacao = ref<'transacao' | 'recorrente' | 'investimento'>('transacao')
 const loading = ref(false)
@@ -39,6 +40,8 @@ const txForm = reactive({
   type: 'expense' as 'expense' | 'income' | 'transfer',
   payment_method: 'credit' as 'debit' | 'credit',
   accountId: null as number | null,
+  destinationAccountId: null as number | null,
+  paid: false,
   amount: '',
   date: nowISO(),
   description: '',
@@ -115,12 +118,36 @@ const investmentPositions = computed(() => {
 // Todas as contas sempre disponíveis
 const availableAccounts = computed(() => accountsStore.accounts)
 
+// ── Transfer helpers ──
+const canTransfer = computed(() => accountsStore.accounts.length >= 2)
+
+const originAccountBalance = computed(() => {
+  if (!txForm.accountId) return null
+  const acc = accountsStore.accounts.find(a => a.id === txForm.accountId)
+  return acc ? acc.balance_cents : null
+})
+
+const destinationAccounts = computed(() =>
+  accountsStore.accounts.filter(a => a.id !== txForm.accountId),
+)
+
+const showPaidStatusCheckbox = computed(() =>
+  txForm.type === 'expense'
+  && txForm.payment_method === 'credit',
+)
+
 watch(() => invForm.positionId, () => {
-  invForm.event_type = selectedPosition.value?.bucket === 'fixed' ? 'contribution' : 'buy'
-  invForm.quantity = ''
-  invForm.unit_price = ''
-  invForm.amount = ''
-  invForm.fees = ''
+  const position = selectedPosition.value
+  if (!position) return
+
+  // Só ajusta event_type se o tipo atual não for compatível com o novo bucket
+  const validTypes = position.bucket === 'fixed'
+    ? ['contribution', 'withdrawal', 'income', 'maturity']
+    : ['buy', 'sell', 'income']
+
+  if (!validTypes.includes(invForm.event_type)) {
+    invForm.event_type = position.bucket === 'fixed' ? 'contribution' : 'buy'
+  }
 })
 
 watch(() => [invForm.quantity, invForm.unit_price], () => {
@@ -151,6 +178,7 @@ watch(() => txForm.type, () => {
     txForm.totalParcelas = ''
     txForm.produto = ''
     txForm.valorParcela = ''
+    txForm.destinationAccountId = null
   }
 })
 
@@ -208,6 +236,7 @@ watch(() => props.editTransaction, (tx) => {
     txForm.type = tx.type
     txForm.payment_method = tx.payment_method ?? 'credit'
     txForm.accountId = tx.accountId
+    txForm.paid = tx.paid
     txForm.amount = centsToBRLDisplay(tx.amount_cents)
     txForm.date = tx.date
     txForm.description = tx.description ?? ''
@@ -241,7 +270,8 @@ watch(() => props.defaultType, (type) => {
 
 function resetForms() {
   Object.assign(txForm, {
-    type: 'expense', payment_method: 'credit', accountId: null,
+    type: 'expense', payment_method: 'credit', accountId: null, destinationAccountId: null,
+    paid: false,
     amount: '', date: nowISO(),
     description: '', parcelado: false, totalParcelas: '', produto: '', valorParcela: '',
   })
@@ -262,6 +292,7 @@ function resetForms() {
 }
 
 async function handleSubmit() {
+  if (loading.value) return
   loading.value = true
 
   try {
@@ -301,11 +332,72 @@ async function submitTransacao() {
   if (!txForm.date) throw new Error('Informe a data')
 
   const cents = parseBRLToCents(txForm.amount)
-  const amount_cents = txForm.type === 'expense' ? -cents : cents
+
+  // ── Transferência ──
+  if (txForm.type === 'transfer') {
+    const transferAccountId = isEditingPaidTransaction.value
+      ? props.editTransaction!.accountId
+      : txForm.accountId
+    const transferDestinationAccountId = isEditingPaidTransaction.value
+      ? props.editTransaction?.destinationAccountId ?? null
+      : txForm.destinationAccountId
+    const transferAmountCents = isEditingPaidTransaction.value
+      ? props.editTransaction!.amount_cents
+      : -cents
+
+    if (!transferDestinationAccountId) throw new Error('Selecione a conta destino')
+    if (transferAccountId === transferDestinationAccountId) throw new Error('Conta origem e destino devem ser diferentes')
+    if (!canTransfer.value) throw new Error('Cadastre pelo menos 2 contas para transferir')
+
+    if (!props.editTransaction || !isEditingPaidTransaction.value) {
+      const originBalance = originAccountBalance.value ?? 0
+      if (originBalance < cents) throw new Error('Saldo insuficiente na conta de origem')
+    }
+
+    if (props.editTransaction) {
+      await transactionsStore.updateTransaction(props.editTransaction.id, {
+        accountId: transferAccountId,
+        destinationAccountId: transferDestinationAccountId,
+        date: txForm.date,
+        type: 'transfer',
+        payment_method: undefined,
+        amount_cents: transferAmountCents,
+        description: txForm.description || 'Transferência entre contas',
+        paid: isEditingPaidTransaction.value ? props.editTransaction.paid : true,
+      })
+      return
+    }
+
+    await transactionsStore.addTransaction({
+      accountId: transferAccountId,
+      destinationAccountId: transferDestinationAccountId,
+      date: txForm.date,
+      type: 'transfer',
+      payment_method: undefined,
+      amount_cents: transferAmountCents,
+      description: txForm.description || 'Transferência entre contas',
+      paid: true,
+      installment: null,
+    })
+
+    // Debita origem e credita destino
+    const label = txForm.description || 'Transferência entre contas'
+    await accountsStore.adjustBalance(transferAccountId, transferAmountCents, `Saída transferência - ${label}`)
+    await accountsStore.adjustBalance(transferDestinationAccountId, -transferAmountCents, `Entrada transferência - ${label}`)
+    return
+  }
+
+  // ── Despesa / Receita ──
+  const amount_cents = isEditingPaidTransaction.value
+    ? props.editTransaction!.amount_cents
+    : txForm.type === 'expense' ? -cents : cents
   const payment_method = txForm.type === 'income' ? undefined : txForm.payment_method
 
   if (props.editTransaction) {
-    const paid = transactionsStore.derivePaid(txForm.type, payment_method)
+    const defaultPaid = transactionsStore.derivePaid(txForm.type, payment_method)
+    const paid = isEditingPaidTransaction.value
+      ? props.editTransaction.paid
+      : (txForm.paid || defaultPaid)
     await transactionsStore.updateTransaction(props.editTransaction.id, {
       accountId: txForm.accountId,
       date: txForm.date,
@@ -335,6 +427,8 @@ async function submitTransacao() {
       totalInstallments: total,
     })
   } else {
+    const paid = txForm.paid || transactionsStore.derivePaid(txForm.type, payment_method)
+
     const tx = await transactionsStore.addTransaction({
       accountId: txForm.accountId,
       date: txForm.date,
@@ -342,7 +436,7 @@ async function submitTransacao() {
       payment_method,
       amount_cents,
       description: txForm.description || undefined,
-      paid: transactionsStore.derivePaid(txForm.type, payment_method),
+      paid,
       installment: null,
     })
 
@@ -425,7 +519,7 @@ async function submitInvestimento() {
   if (!invForm.amount) throw new Error('Informe o valor total')
 
   const position = selectedPosition.value
-  if (!position) throw new Error('Posição inválida')
+  if (!position) throw new Error('Ativo inválido')
 
   if (position.investment_type === 'caixinha' && invForm.event_type === 'maturity') {
     throw new Error('Evento vencimento nao esta disponivel para caixinha')
@@ -475,85 +569,150 @@ const recPaymentMethodOptions = [
   <Tabs v-model="tipoMovimentacao" class="space-y-4">
     <form @submit.prevent="handleSubmit" class="space-y-4">
       <TabsList class="w-full" v-if="!isEdit">
-        <TabsTrigger value="transacao" class="flex-1">Transação</TabsTrigger>
-        <TabsTrigger value="recorrente" class="flex-1">Recorrente</TabsTrigger>
-        <TabsTrigger value="investimento" class="flex-1">Investimento</TabsTrigger>
+        <TabsTrigger value="transacao" class="flex-1" :disabled="loading">Transação</TabsTrigger>
+        <TabsTrigger value="recorrente" class="flex-1" :disabled="loading">Recorrente</TabsTrigger>
+        <TabsTrigger value="investimento" class="flex-1" :disabled="loading">Investimento</TabsTrigger>
       </TabsList>
 
+      <div :class="loading ? 'pointer-events-none opacity-70 transition-opacity' : 'transition-opacity'">
       <template v-if="tipoMovimentacao === 'transacao'">
-        <div class="grid grid-cols-2 gap-4">
-          <!-- Tipo (primeiro) -->
-          <div class="space-y-2">
-            <Label>Tipo *</Label>
-            <Select v-model="txForm.type">
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="opt in txTypeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <!-- Método (segundo, condicional) -->
-          <div v-if="txForm.type !== 'income'" class="space-y-2">
-            <Label>Método *</Label>
-            <Select v-model="txForm.payment_method">
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="opt in methodOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <!-- Conta (terceiro) -->
-          <div class="space-y-2">
-            <Label>Conta *</Label>
-            <Select v-model="txForm.accountId">
-              <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="acc in availableAccounts" :key="acc.id" :value="acc.id">{{ acc.label }}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-
-          <div class="space-y-2">
-            <Label>Valor *</Label>
-            <MoneyInput v-model="txForm.amount" />
-          </div>
-
-          <div class="space-y-2">
-            <Label>Data *</Label>
-            <Input v-model="txForm.date" type="date" />
-          </div>
-
-          <div class="col-span-2 space-y-2">
-            <Label>Descrição</Label>
-            <Input v-model="txForm.description" placeholder="Opcional" />
-          </div>
+        <!-- Tipo (sempre visível) -->
+        <div class="space-y-2">
+          <Label>Tipo *</Label>
+          <Select v-model="txForm.type">
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="opt in txTypeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
-
-        <div v-if="!isEdit && txForm.type === 'expense'" class="space-y-3">
-          <div class="flex items-center gap-2">
-            <Checkbox v-model="txForm.parcelado" />
-            <Label>Parcelado</Label>
+        <!-- ── Layout Transferência ── -->
+        <template v-if="txForm.type === 'transfer'">
+          <div v-if="!canTransfer" class="text-sm text-destructive">
+            Cadastre pelo menos 2 contas para realizar transferências.
           </div>
 
-          <div v-if="txForm.parcelado" class="grid grid-cols-3 gap-4 pl-6">
+          <div v-else class="grid grid-cols-2 gap-4">
+            <!-- Conta Origem -->
             <div class="space-y-2">
-              <Label>Total de Parcelas *</Label>
-              <Input v-model="txForm.totalParcelas" placeholder="Ex: 10" type="number" min="2" />
+              <Label>Conta Origem *</Label>
+              <Select v-model="txForm.accountId">
+                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="acc in availableAccounts" :key="acc.id" :value="acc.id">{{ acc.label }}</SelectItem>
+                </SelectContent>
+              </Select>
+              <p v-if="originAccountBalance !== null" class="text-xs text-muted-foreground">
+                Saldo: {{ formatCentsToBRL(originAccountBalance) }}
+              </p>
             </div>
+
+            <!-- Conta Destino -->
             <div class="space-y-2">
-              <Label>Valor da Parcela *</Label>
-              <MoneyInput v-model="txForm.valorParcela" />
+              <Label>Conta Destino *</Label>
+              <Select v-model="txForm.destinationAccountId">
+                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="acc in destinationAccounts" :key="acc.id" :value="acc.id">{{ acc.label }}</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+
             <div class="space-y-2">
-              <Label>Produto *</Label>
-              <Input v-model="txForm.produto" placeholder="Ex: Geladeira" />
+              <Label>Valor *</Label>
+              <MoneyInput v-model="txForm.amount" :disabled="isEditingPaidTransaction" />
+              <p v-if="isEditingPaidTransaction" class="text-xs text-muted-foreground">
+                Valor bloqueado para transação já paga.
+              </p>
+            </div>
+
+            <div class="space-y-2">
+              <Label>Data *</Label>
+              <Input v-model="txForm.date" type="date" />
+            </div>
+
+            <div class="col-span-2 space-y-2">
+              <Label>Descrição</Label>
+              <Input v-model="txForm.description" placeholder="Opcional" />
+            </div>
+
+          </div>
+        </template>
+
+        <!-- ── Layout Despesa / Receita ── -->
+        <template v-else>
+          <div class="grid grid-cols-2 gap-4">
+            <!-- Método (condicional) -->
+            <div v-if="txForm.type !== 'income'" class="space-y-2">
+              <Label>Método *</Label>
+              <Select v-model="txForm.payment_method">
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="opt in methodOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <!-- Conta -->
+            <div class="space-y-2">
+              <Label>Conta *</Label>
+              <Select v-model="txForm.accountId">
+                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="acc in availableAccounts" :key="acc.id" :value="acc.id">{{ acc.label }}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div class="space-y-2">
+              <Label>Valor *</Label>
+              <MoneyInput v-model="txForm.amount" :disabled="isEditingPaidTransaction" />
+              <p v-if="isEditingPaidTransaction" class="text-xs text-muted-foreground">
+                Valor bloqueado para transação já paga.
+              </p>
+            </div>
+
+            <div class="space-y-2">
+              <Label>Data *</Label>
+              <Input v-model="txForm.date" type="date" />
+            </div>
+
+            <div class="col-span-2 space-y-2">
+              <Label>Descrição</Label>
+              <Input v-model="txForm.description" placeholder="Opcional" />
+            </div>
+
+            <div v-if="showPaidStatusCheckbox" class="col-span-2 flex items-center gap-2 pt-1">
+              <Checkbox v-model="txForm.paid" :disabled="loading || isEditingPaidTransaction" />
+              <Label>
+                {{ isEditingPaidTransaction ? 'Pago (desfazer via ação específica)' : 'Marcar como pago' }}
+              </Label>
             </div>
           </div>
-        </div>
+
+          <div v-if="!isEdit && txForm.type === 'expense'" class="space-y-3">
+            <div class="flex items-center gap-2">
+              <Checkbox v-model="txForm.parcelado" />
+              <Label>Parcelado</Label>
+            </div>
+
+            <div v-if="txForm.parcelado" class="grid grid-cols-3 gap-4 pl-6">
+              <div class="space-y-2">
+                <Label>Total de Parcelas *</Label>
+                <Input v-model="txForm.totalParcelas" placeholder="Ex: 10" type="number" min="2" />
+              </div>
+              <div class="space-y-2">
+                <Label>Valor da Parcela *</Label>
+                <MoneyInput v-model="txForm.valorParcela" />
+              </div>
+              <div class="space-y-2">
+                <Label>Produto *</Label>
+                <Input v-model="txForm.produto" placeholder="Ex: Geladeira" />
+              </div>
+            </div>
+          </div>
+        </template>
       </template>
 
       <template v-if="tipoMovimentacao === 'recorrente'">
@@ -636,7 +795,7 @@ const recPaymentMethodOptions = [
       <template v-if="tipoMovimentacao === 'investimento'">
         <div class="grid grid-cols-2 gap-4">
           <div class="col-span-2 space-y-2">
-            <Label>Posição *</Label>
+            <Label>Ativo *</Label>
             <Select v-model="invForm.positionId">
               <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
               <SelectContent>
@@ -689,9 +848,11 @@ const recPaymentMethodOptions = [
           </div>
         </div>
       </template>
+      </div>
 
-      <Button type="submit" :disabled="loading" class="w-full">
-        <Save class="h-4 w-4 mr-2" />
+      <Button type="submit" :disabled="loading || (txForm.type === 'transfer' && !canTransfer)" class="w-full">
+        <Spinner v-if="loading" class="h-4 w-4 mr-2" />
+        <Save v-else class="h-4 w-4 mr-2" />
         {{ loading ? 'Salvando...' : (isEdit ? 'Atualizar' : 'Salvar') }}
       </Button>
     </form>

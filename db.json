@@ -4,10 +4,17 @@
       "bank": "inter",
       "label": "Inter Principal",
       "type": "bank",
-      "balance_cents": 347190,
+      "balance_cents": 157173,
       "card_closing_day": 24,
       "card_due_day": 26,
       "id": 1
+    },
+    {
+      "bank": "nubank",
+      "label": "Nubank Principal",
+      "type": "bank",
+      "balance_cents": 55005,
+      "id": 2
     }
   ],
   "transactions": [
@@ -19,7 +26,8 @@
       "amount_cents": -55000,
       "paid": true,
       "installment": null,
-      "id": "6c45e599-f642-411c-8f2d-72129bb901fb"
+      "id": "6c45e599-f642-411c-8f2d-72129bb901fb",
+      "createdAt": "2026-02-25"
     },
     {
       "accountId": 1,
@@ -29,7 +37,8 @@
       "amount_cents": -12,
       "paid": true,
       "installment": null,
-      "id": "e3dd0410-15ac-4a4c-a3d1-6cc97b0c36ba"
+      "id": "e3dd0410-15ac-4a4c-a3d1-6cc97b0c36ba",
+      "createdAt": "2026-02-25"
     },
     {
       "accountId": 1,
@@ -39,7 +48,8 @@
       "amount_cents": -986,
       "paid": true,
       "installment": null,
-      "id": "24b90bdf-fae5-4959-8627-96dbb55a7def"
+      "id": "24b90bdf-fae5-4959-8627-96dbb55a7def",
+      "createdAt": "2026-02-25"
     },
     {
       "accountId": 1,
@@ -49,7 +59,8 @@
       "amount_cents": -29,
       "paid": true,
       "installment": null,
-      "id": "3eba0ad6-a8b9-449a-9446-4527b6eb00c2"
+      "id": "3eba0ad6-a8b9-449a-9446-4527b6eb00c2",
+      "createdAt": "2026-02-25"
     },
     {
       "accountId": 1,
@@ -59,7 +70,8 @@
       "amount_cents": -2466,
       "paid": true,
       "installment": null,
-      "id": "5d00aeef-2f91-4723-8485-8467f2028bc9"
+      "id": "5d00aeef-2f91-4723-8485-8467f2028bc9",
+      "createdAt": "2026-02-25"
     },
     {
       "accountId": 1,
@@ -69,7 +81,8 @@
       "amount_cents": -34555,
       "paid": true,
       "installment": null,
-      "id": "60faff4c-f8b9-4960-bac2-7cbe3b79d1c6"
+      "id": "60faff4c-f8b9-4960-bac2-7cbe3b79d1c6",
+      "createdAt": "2026-02-25"
     },
     {
       "accountId": 1,
@@ -79,7 +92,8 @@
       "amount_cents": -9762,
       "paid": true,
       "installment": null,
-      "id": "0f4edf42-f770-43ad-a3d1-b95df3586ec2"
+      "id": "0f4edf42-f770-43ad-a3d1-b95df3586ec2",
+      "createdAt": "2026-02-25"
     },
     {
       "accountId": 1,
@@ -89,7 +103,8 @@
       "amount_cents": -20000,
       "paid": true,
       "installment": null,
-      "id": "01f16af0-29b5-4c3d-8aba-6478d818959a"
+      "id": "01f16af0-29b5-4c3d-8aba-6478d818959a",
+      "createdAt": "2026-02-25"
     },
     {
       "accountId": 1,
@@ -100,7 +115,8 @@
       "description": "5",
       "paid": true,
       "installment": null,
-      "id": "adf50452-c10e-4d55-82f6-c691c81f595d"
+      "id": "adf50452-c10e-4d55-82f6-c691c81f595d",
+      "createdAt": "2026-02-25"
     },
     {
       "accountId": 1,
@@ -110,7 +126,8 @@
       "amount_cents": -50000,
       "paid": true,
       "installment": null,
-      "id": "6ad18fbd-58de-49b7-8df0-655239fe219d"
+      "id": "6ad18fbd-58de-49b7-8df0-655239fe219d",
+      "createdAt": "2026-02-23"
     },
     {
       "accountId": 1,
@@ -120,7 +137,8 @@
       "amount_cents": -55555,
       "paid": false,
       "installment": null,
-      "id": "6a9cbb64-c92e-4fbc-b85b-930301a7491d"
+      "id": "6a9cbb64-c92e-4fbc-b85b-930301a7491d",
+      "createdAt": "2026-04-24"
     },
     {
       "accountId": 1,
@@ -129,7 +147,32 @@
       "amount_cents": 500000,
       "paid": true,
       "installment": null,
-      "id": "130fb9b7-ebae-4199-9685-7dfd9a811e96"
+      "id": "130fb9b7-ebae-4199-9685-7dfd9a811e96",
+      "createdAt": "2026-02-25"
+    },
+    {
+      "accountId": 1,
+      "date": "2026-02-21",
+      "type": "expense",
+      "payment_method": "debit",
+      "amount_cents": -140000,
+      "description": "Aluguel",
+      "paid": true,
+      "installment": null,
+      "recurrentId": "61d21622-bd4d-445a-9a23-d4cc20adf3d6",
+      "id": "21c14b75-c41a-4cbb-baa0-ace752791219",
+      "createdAt": "2026-02-26"
+    },
+    {
+      "accountId": 1,
+      "date": "2026-02-26",
+      "type": "expense",
+      "payment_method": "credit",
+      "amount_cents": -12,
+      "paid": true,
+      "installment": null,
+      "id": "1922858e-46ee-4c81-ba1b-d54496aa9ce6",
+      "createdAt": "2026-02-26"
     }
   ],
   "recurrents": [
@@ -216,10 +259,81 @@
       "id": "6ad077b8-82be-4af9-b130-d02dac1290fe"
     }
   ],
-  "investments": [],
-  "investment_positions": [],
-  "investment_events": [],
-  "tags": [],
+  "investment_positions": [
+    {
+      "accountId": 1,
+      "bucket": "variable",
+      "investment_type": "fii",
+      "asset_code": "MXRF11",
+      "is_active": true,
+      "invested_cents": 636943,
+      "id": "d88abc1b-a3e6-47a0-a4b4-1aeb3df261d5",
+      "quantity_total": 628,
+      "avg_cost_cents": 1014
+    },
+    {
+      "accountId": 1,
+      "bucket": "variable",
+      "investment_type": "fii",
+      "asset_code": "SC11",
+      "is_active": true,
+      "invested_cents": 0,
+      "id": "125dd0a1-97c7-4410-8c46-0dcaff17d8ca",
+      "quantity_total": 0
+    }
+  ],
+  "investment_events": [
+    {
+      "positionId": "d88abc1b-a3e6-47a0-a4b4-1aeb3df261d5",
+      "accountId": 1,
+      "date": "2026-02-26",
+      "event_type": "buy",
+      "amount_cents": 542440,
+      "quantity": 568,
+      "unit_price_cents": 955,
+      "id": "82fe2182-2d18-4a50-905f-8f95798a940e"
+    },
+    {
+      "positionId": "d88abc1b-a3e6-47a0-a4b4-1aeb3df261d5",
+      "accountId": 1,
+      "date": "2026-02-26",
+      "event_type": "buy",
+      "amount_cents": 9000,
+      "quantity": 10,
+      "unit_price_cents": 900,
+      "id": "47435e7a-c3fa-466f-b3d7-5f9636ff9255"
+    },
+    {
+      "positionId": "d88abc1b-a3e6-47a0-a4b4-1aeb3df261d5",
+      "accountId": 1,
+      "date": "2026-02-26",
+      "event_type": "buy",
+      "amount_cents": 45000,
+      "quantity": 50,
+      "unit_price_cents": 900,
+      "id": "67f212d9-c3d6-4cf3-866f-52f4898e9b43"
+    },
+    {
+      "positionId": "d88abc1b-a3e6-47a0-a4b4-1aeb3df261d5",
+      "accountId": 1,
+      "date": "2026-02-26",
+      "event_type": "sell",
+      "amount_cents": 50000,
+      "quantity": 10,
+      "unit_price_cents": 5000,
+      "id": "bfbb58e1-69ca-4c94-8629-86c4b277a982"
+    },
+    {
+      "positionId": "d88abc1b-a3e6-47a0-a4b4-1aeb3df261d5",
+      "accountId": 1,
+      "date": "2026-02-26",
+      "event_type": "buy",
+      "amount_cents": 50000,
+      "quantity": 10,
+      "unit_price_cents": 5000,
+      "id": "4ac1e54c-265a-478c-bf73-9fa412964a39"
+    }
+  ],
   "history": [
     {
       "id": "c713d9ba-8d67-4ac7-8995-c86700812542",
@@ -297,6 +411,62 @@
       "date": "2026-02-25",
       "balance_cents": 347190,
       "note": "Transacao"
+    },
+    {
+      "id": "7eb2ad97-e5ea-420a-896c-b02186a96f5f",
+      "accountId": 1,
+      "date": "2026-02-26",
+      "balance_cents": 297190,
+      "note": "Saída transferência - Salário enviado para lá"
+    },
+    {
+      "id": "8378cbb6-8bf1-485d-b769-79c0bd884583",
+      "accountId": 2,
+      "date": "2026-02-26",
+      "balance_cents": 55000,
+      "note": "Entrada transferência - Salário enviado para lá"
+    },
+    {
+      "id": "1527a705-4a72-48a6-a4ca-1313b5f615c3",
+      "accountId": 1,
+      "date": "2026-02-26",
+      "balance_cents": 297185,
+      "note": "Saída transferência - Transferência entre contas"
+    },
+    {
+      "id": "0a4cebab-4aa2-4ce0-9c99-c5180d01dcb8",
+      "accountId": 2,
+      "date": "2026-02-26",
+      "balance_cents": 55005,
+      "note": "Entrada transferência - Transferência entre contas"
+    },
+    {
+      "id": "40ea6be9-5f93-4288-92b7-9b8920ee4689",
+      "accountId": 1,
+      "date": "2026-02-26",
+      "balance_cents": 347185,
+      "note": "Venda investimento"
+    },
+    {
+      "id": "986b9404-8409-423e-a7ce-4303fd8fc6d7",
+      "accountId": 1,
+      "date": "2026-02-26",
+      "balance_cents": 297185,
+      "note": "Compra investimento"
+    },
+    {
+      "id": "2cd70c4b-a6a8-415d-bb9e-dfce9297560e",
+      "accountId": 1,
+      "date": "2026-02-26",
+      "balance_cents": 157185,
+      "note": "Aluguel"
+    },
+    {
+      "id": "91d85813-10a4-4572-abdc-f1bc84e9e8a2",
+      "accountId": 1,
+      "date": "2026-02-26",
+      "balance_cents": 157173,
+      "note": "Ajuste edicao - Transacao"
     }
   ]
 }

@@ -12,6 +12,8 @@ const accountsStore = useAccountsStore()
 const positionsStore = useInvestmentPositionsStore()
 const eventsStore = useInvestmentEventsStore()
 const appToast = useAppToast()
+const route = useRoute()
+const router = useRouter()
 
 const loading = ref(true)
 const refreshing = ref(false)
@@ -37,6 +39,10 @@ const viewingEvent = ref<InvestmentEvent | null>(null)
 
 const confirmDeleteOpen = ref(false)
 const deleteTarget = ref<{ type: 'position' | 'event'; id: string; label: string } | null>(null)
+const deleting = ref(false)
+const savingPosition = ref(false)
+const savingEvent = ref(false)
+const isProcessing = computed(() => deleting.value || savingPosition.value || savingEvent.value)
 
 const positionForm = reactive({
   accountId: null as number | null,
@@ -75,6 +81,18 @@ const loadErrorMessage = computed(() => {
   if (!loadFailedSources.value.length) return ''
   return `Falha ao carregar: ${loadFailedSources.value.join(', ')}.`
 })
+
+function parseBucketQuery(value: unknown): 'variable' | 'fixed' | null {
+  if (typeof value !== 'string') return null
+  if (value === 'variable' || value === 'fixed') return value
+  return null
+}
+
+function parseStringQuery(value: unknown): string | null {
+  if (typeof value === 'string' && value.trim()) return value
+  if (Array.isArray(value) && typeof value[0] === 'string' && value[0].trim()) return value[0]
+  return null
+}
 
 async function loadPageData() {
   const firstLoad = !hasSuccessfulLoad.value && !refreshing.value
@@ -163,7 +181,7 @@ const requiresAssetCode = computed(() =>
 )
 
 const positionDialogTitle = computed(() =>
-  editingPosition.value ? 'Editar Posicao' : 'Nova Posicao',
+  editingPosition.value ? 'Editar Ativo' : 'Novo Ativo',
 )
 
 const eventDialogTitle = computed(() =>
@@ -210,6 +228,44 @@ const filteredEvents = computed(() =>
     .sort((a, b) => b.date.localeCompare(a.date)),
 )
 
+const pageSizeOptions = [10, 20, 40, 70, 100] as const
+
+const variablePageSize = ref<number>(40)
+const variablePage = ref(1)
+const variableGoToPage = ref('')
+const variableTotalItems = computed(() => variablePositions.value.length)
+const variableTotalPages = computed(() => Math.max(1, Math.ceil(variableTotalItems.value / variablePageSize.value)))
+const variablePageStart = computed(() => (variableTotalItems.value ? (variablePage.value - 1) * variablePageSize.value + 1 : 0))
+const variablePageEnd = computed(() => Math.min(variablePage.value * variablePageSize.value, variableTotalItems.value))
+const paginatedVariablePositions = computed(() => {
+  const start = (variablePage.value - 1) * variablePageSize.value
+  return variablePositions.value.slice(start, start + variablePageSize.value)
+})
+
+const fixedPageSize = ref<number>(40)
+const fixedPage = ref(1)
+const fixedGoToPage = ref('')
+const fixedTotalItems = computed(() => fixedPositions.value.length)
+const fixedTotalPages = computed(() => Math.max(1, Math.ceil(fixedTotalItems.value / fixedPageSize.value)))
+const fixedPageStart = computed(() => (fixedTotalItems.value ? (fixedPage.value - 1) * fixedPageSize.value + 1 : 0))
+const fixedPageEnd = computed(() => Math.min(fixedPage.value * fixedPageSize.value, fixedTotalItems.value))
+const paginatedFixedPositions = computed(() => {
+  const start = (fixedPage.value - 1) * fixedPageSize.value
+  return fixedPositions.value.slice(start, start + fixedPageSize.value)
+})
+
+const eventsPageSize = ref<number>(40)
+const eventsPage = ref(1)
+const eventsGoToPage = ref('')
+const eventsTotalItems = computed(() => filteredEvents.value.length)
+const eventsTotalPages = computed(() => Math.max(1, Math.ceil(eventsTotalItems.value / eventsPageSize.value)))
+const eventsPageStart = computed(() => (eventsTotalItems.value ? (eventsPage.value - 1) * eventsPageSize.value + 1 : 0))
+const eventsPageEnd = computed(() => Math.min(eventsPage.value * eventsPageSize.value, eventsTotalItems.value))
+const paginatedEvents = computed(() => {
+  const start = (eventsPage.value - 1) * eventsPageSize.value
+  return filteredEvents.value.slice(start, start + eventsPageSize.value)
+})
+
 watch(() => positionForm.bucket, (bucket) => {
   positionForm.investment_type = bucket === 'variable' ? 'fii' : 'cdb'
 })
@@ -221,7 +277,17 @@ watch(() => positionForm.investment_type, (type) => {
 })
 
 watch(() => eventForm.positionId, () => {
-  eventForm.event_type = selectedPosition.value?.bucket === 'fixed' ? 'contribution' : 'buy'
+  const position = selectedPosition.value
+  if (!position) return
+
+  // Só ajusta event_type se o tipo atual não for compatível com o novo bucket
+  const validTypes = position.bucket === 'fixed'
+    ? ['contribution', 'withdrawal', 'income', 'maturity']
+    : ['buy', 'sell', 'income']
+
+  if (!validTypes.includes(eventForm.event_type)) {
+    eventForm.event_type = position.bucket === 'fixed' ? 'contribution' : 'buy'
+  }
 })
 
 watch(() => [eventForm.quantity, eventForm.unit_price], () => {
@@ -233,6 +299,109 @@ watch(() => [eventForm.quantity, eventForm.unit_price], () => {
   const cents = parseBRLToCents(eventForm.unit_price)
   eventForm.amount = formatCentsToBRL(Math.round(qty * cents))
 })
+
+function clampPage(page: number, totalPages: number) {
+  return Math.min(Math.max(1, page), totalPages)
+}
+
+function setVariablePage(page: number) {
+  variablePage.value = clampPage(page, variableTotalPages.value)
+}
+
+function setFixedPage(page: number) {
+  fixedPage.value = clampPage(page, fixedTotalPages.value)
+}
+
+function setEventsPage(page: number) {
+  eventsPage.value = clampPage(page, eventsTotalPages.value)
+}
+
+function goToPage(input: string, totalPages: number, setter: (page: number) => void) {
+  const parsed = Number(input)
+  if (!Number.isFinite(parsed) || parsed < 1) return
+  setter(clampPage(Math.trunc(parsed), totalPages))
+}
+
+function submitVariableGoToPage() {
+  goToPage(variableGoToPage.value, variableTotalPages.value, setVariablePage)
+  variableGoToPage.value = ''
+}
+
+function submitFixedGoToPage() {
+  goToPage(fixedGoToPage.value, fixedTotalPages.value, setFixedPage)
+  fixedGoToPage.value = ''
+}
+
+function submitEventsGoToPage() {
+  goToPage(eventsGoToPage.value, eventsTotalPages.value, setEventsPage)
+  eventsGoToPage.value = ''
+}
+
+async function applyRouteFocusFromQuery() {
+  if (loading.value) return
+
+  const positionId = parseStringQuery(route.query.positionId)
+  if (!positionId) return
+
+  const position = positionsStore.positions.find(item => item.id === positionId)
+  if (!position) return
+
+  const routeBucket = parseBucketQuery(route.query.bucket)
+  const targetBucket = routeBucket ?? position.bucket
+
+  if (activeBucket.value !== targetBucket) {
+    activeBucket.value = targetBucket
+    await nextTick()
+  }
+
+  if (targetBucket === 'variable') {
+    const index = variablePositions.value.findIndex(item => item.id === positionId)
+    if (index >= 0) {
+      setVariablePage(Math.floor(index / variablePageSize.value) + 1)
+    }
+  } else {
+    const index = fixedPositions.value.findIndex(item => item.id === positionId)
+    if (index >= 0) {
+      setFixedPage(Math.floor(index / fixedPageSize.value) + 1)
+    }
+  }
+
+  openViewPosition(position)
+
+  const nextQuery = { ...route.query }
+  delete nextQuery.positionId
+  delete nextQuery.bucket
+
+  await router.replace({ query: nextQuery }).catch((error) => {
+    console.error('Erro ao limpar query de busca global em investimentos:', error)
+  })
+}
+
+watch([variablePageSize, variableTotalPages], () => {
+  setVariablePage(variablePage.value)
+})
+
+watch([fixedPageSize, fixedTotalPages], () => {
+  setFixedPage(fixedPage.value)
+})
+
+watch([eventsPageSize, eventsTotalPages], () => {
+  setEventsPage(eventsPage.value)
+})
+
+watch(activeBucket, () => {
+  eventsPage.value = 1
+  eventsGoToPage.value = ''
+})
+
+watch(
+  () => [route.query.positionId, route.query.bucket, loading.value],
+  () => {
+    if (loading.value) return
+    void applyRouteFocusFromQuery()
+  },
+  { immediate: true },
+)
 
 function getAccountLabel(accountId: number) {
   return accountsStore.accounts.find(a => a.id === accountId)?.label ?? '—'
@@ -413,7 +582,7 @@ const showDetailedEvolution = computed(() =>
 const viewingTimelineTitle = computed(() =>
   viewingPosition.value?.investment_type === 'caixinha'
     ? 'Evolucao da Caixinha'
-    : 'Evolucao da Posicao',
+    : 'Evolucao do Ativo',
 )
 
 const timelineChartData = computed(() => {
@@ -474,12 +643,14 @@ function resetEventForm() {
 }
 
 function openNewPosition() {
+  if (isProcessing.value) return
   editingPosition.value = null
   resetPositionForm()
   positionDialogOpen.value = true
 }
 
 function openEditPosition(position: InvestmentPosition) {
+  if (isProcessing.value) return
   editingPosition.value = position
   positionForm.accountId = position.accountId
   positionForm.bucket = position.bucket
@@ -498,17 +669,20 @@ function openEditPosition(position: InvestmentPosition) {
 }
 
 function openViewPosition(position: InvestmentPosition) {
+  if (isProcessing.value) return
   viewingPosition.value = position
   positionViewDialogOpen.value = true
 }
 
 function openNewEvent() {
+  if (isProcessing.value) return
   editingEvent.value = null
   resetEventForm()
   eventDialogOpen.value = true
 }
 
 function openEditEvent(event: InvestmentEvent) {
+  if (isProcessing.value) return
   editingEvent.value = event
   eventForm.positionId = event.positionId
   eventForm.date = event.date
@@ -522,11 +696,13 @@ function openEditEvent(event: InvestmentEvent) {
 }
 
 function openViewEvent(event: InvestmentEvent) {
+  if (isProcessing.value) return
   viewingEvent.value = event
   eventViewDialogOpen.value = true
 }
 
 function requestDeletePosition(position: InvestmentPosition) {
+  if (isProcessing.value) return
   deleteTarget.value = {
     type: 'position',
     id: position.id,
@@ -536,12 +712,29 @@ function requestDeletePosition(position: InvestmentPosition) {
 }
 
 function requestDeleteEvent(event: InvestmentEvent) {
+  if (isProcessing.value) return
   deleteTarget.value = {
     type: 'event',
     id: event.id,
     label: `${getPositionLabel(event.positionId)} · ${event.date}`,
   }
   confirmDeleteOpen.value = true
+}
+
+function cancelDelete() {
+  if (isProcessing.value) return
+  confirmDeleteOpen.value = false
+  deleteTarget.value = null
+}
+
+function onPositionDialogOpenChange(open: boolean) {
+  if (!open && savingPosition.value) return
+  positionDialogOpen.value = open
+}
+
+function onEventDialogOpenChange(open: boolean) {
+  if (!open && savingEvent.value) return
+  eventDialogOpen.value = open
 }
 
 async function deletePositionWithEvents(positionId: string) {
@@ -553,12 +746,13 @@ async function deletePositionWithEvents(positionId: string) {
 }
 
 async function confirmDelete() {
-  if (!deleteTarget.value) return
+  if (!deleteTarget.value || isProcessing.value) return
+  deleting.value = true
 
   try {
     if (deleteTarget.value.type === 'position') {
       await deletePositionWithEvents(deleteTarget.value.id)
-      appToast.success({ title: 'Posicao excluida' })
+      appToast.success({ title: 'Ativo excluido' })
     } else {
       await eventsStore.deleteEvent(deleteTarget.value.id)
       appToast.success({ title: 'Lancamento excluido' })
@@ -569,6 +763,7 @@ async function confirmDelete() {
       description: e.message || 'Nao foi possivel excluir',
     })
   } finally {
+    deleting.value = false
     confirmDeleteOpen.value = false
     deleteTarget.value = null
   }
@@ -589,6 +784,8 @@ watch(eventDialogOpen, (open) => {
 })
 
 async function submitPosition() {
+  if (isProcessing.value) return
+  savingPosition.value = true
   try {
     if (!positionForm.accountId) throw new Error('Selecione uma conta')
     if (requiresAssetCode.value && !positionForm.asset_code.trim()) {
@@ -601,10 +798,10 @@ async function submitPosition() {
 
     if (editingPosition.value && editingPositionHasEvents.value) {
       if (editingPosition.value.accountId !== positionForm.accountId) {
-        throw new Error('Nao e possivel alterar a conta de uma posicao com lancamentos')
+        throw new Error('Nao e possivel alterar a conta de um ativo com lancamentos')
       }
       if (editingPosition.value.bucket !== positionForm.bucket) {
-        throw new Error('Nao e possivel alterar o grupo de uma posicao com lancamentos')
+        throw new Error('Nao e possivel alterar o grupo de um ativo com lancamentos')
       }
     }
 
@@ -616,7 +813,7 @@ async function submitPosition() {
         && p.investment_type === positionForm.investment_type
         && p.asset_code.toUpperCase() === normalizedCode,
       )
-      if (duplicate) throw new Error('Ja existe posicao desse ativo para essa conta')
+      if (duplicate) throw new Error('Ja existe esse ativo cadastrado para essa conta')
     }
 
     const payload = {
@@ -639,34 +836,38 @@ async function submitPosition() {
 
     if (editingPosition.value) {
       await positionsStore.updatePosition(editingPosition.value.id, payload)
-      appToast.success({ title: 'Posicao atualizada' })
+      appToast.success({ title: 'Ativo atualizado' })
     } else {
       await positionsStore.addPosition({
         ...payload,
         is_active: true,
         invested_cents: 0,
       })
-      appToast.success({ title: 'Posicao criada' })
+      appToast.success({ title: 'Ativo criado' })
     }
 
     resetPositionForm()
     positionDialogOpen.value = false
   } catch (e: any) {
     appToast.error({
-      title: editingPosition.value ? 'Erro ao atualizar posicao' : 'Erro ao criar posicao',
+      title: editingPosition.value ? 'Erro ao atualizar ativo' : 'Erro ao criar ativo',
       description: e.message,
     })
+  } finally {
+    savingPosition.value = false
   }
 }
 
 async function submitEvent() {
+  if (isProcessing.value) return
+  savingEvent.value = true
   try {
-    if (!eventForm.positionId) throw new Error('Selecione uma posicao')
+    if (!eventForm.positionId) throw new Error('Selecione um ativo')
     if (!eventForm.date) throw new Error('Informe a data')
     if (!eventForm.amount) throw new Error('Informe o valor total')
 
     const position = selectedPosition.value
-    if (!position) throw new Error('Posicao invalida')
+    if (!position) throw new Error('Ativo invalido')
 
     if (position.investment_type === 'caixinha' && eventForm.event_type === 'maturity') {
       throw new Error('Evento vencimento nao esta disponivel para caixinha')
@@ -704,12 +905,15 @@ async function submitEvent() {
       title: editingEvent.value ? 'Erro ao atualizar lancamento' : 'Erro ao registrar lancamento',
       description: e.message,
     })
+  } finally {
+    savingEvent.value = false
   }
 }
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="relative space-y-6">
+    <div :class="isProcessing ? 'pointer-events-none opacity-60 transition-opacity' : 'transition-opacity'">
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-3">
         <CandlestickChart class="h-6 w-6 text-muted-foreground" />
@@ -717,11 +921,11 @@ async function submitEvent() {
       </div>
 
       <div class="flex items-center gap-2">
-        <Button variant="outline" @click="openNewPosition">
+        <Button variant="outline" :disabled="isProcessing" @click="openNewPosition">
           <Plus class="h-4 w-4 mr-2" />
-          Nova Posicao
+          Novo Ativo
         </Button>
-        <Button @click="openNewEvent">
+        <Button :disabled="isProcessing" @click="openNewEvent">
           <Plus class="h-4 w-4 mr-2" />
           Novo Lancamento
         </Button>
@@ -743,7 +947,7 @@ async function submitEvent() {
           <p class="text-sm text-muted-foreground">
             {{ loadErrorMessage || 'Verifique o servidor/API e tente novamente.' }}
           </p>
-          <Button :disabled="refreshing" @click="loadPageData">
+          <Button :disabled="refreshing || isProcessing" @click="loadPageData">
             {{ refreshing ? 'Tentando novamente...' : 'Tentar novamente' }}
           </Button>
         </CardContent>
@@ -759,7 +963,7 @@ async function submitEvent() {
           <p class="text-sm text-muted-foreground">
             {{ loadErrorMessage }} Alguns dados podem estar incompletos.
           </p>
-          <Button variant="outline" :disabled="refreshing" @click="loadPageData">
+          <Button variant="outline" :disabled="refreshing || isProcessing" @click="loadPageData">
             {{ refreshing ? 'Atualizando...' : 'Tentar novamente' }}
           </Button>
         </CardContent>
@@ -777,7 +981,20 @@ async function submitEvent() {
               <CardTitle>Carteira Variavel</CardTitle>
             </CardHeader>
             <CardContent>
-              <Table v-if="variablePositions.length">
+              <div class="mb-3 flex items-center justify-end gap-2">
+                <span class="text-sm text-muted-foreground">Itens por pagina</span>
+                <Select v-model="variablePageSize">
+                  <SelectTrigger class="h-8 w-[140px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="size in pageSizeOptions" :key="`variable-page-size-${size}`" :value="size">
+                      {{ size }} / pagina
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Table v-if="variableTotalItems">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Ativo</TableHead>
@@ -790,7 +1007,7 @@ async function submitEvent() {
                 </TableHeader>
                 <TableBody>
                   <TableRow
-                    v-for="p in variablePositions"
+                    v-for="p in paginatedVariablePositions"
                     :key="p.id"
                     class="cursor-pointer"
                     @click="openViewPosition(p)"
@@ -829,6 +1046,31 @@ async function submitEvent() {
                   </TableRow>
                 </TableBody>
               </Table>
+              <div v-if="variableTotalItems" class="mt-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <p class="text-sm text-muted-foreground">
+                  Mostrando {{ variablePageStart }}-{{ variablePageEnd }} de {{ variableTotalItems }} itens
+                </p>
+                <div class="flex flex-wrap items-center gap-2">
+                  <Button variant="outline" size="sm" :disabled="variablePage <= 1" @click="setVariablePage(variablePage - 1)">
+                    Anterior
+                  </Button>
+                  <Button variant="outline" size="sm" :disabled="variablePage >= variableTotalPages" @click="setVariablePage(variablePage + 1)">
+                    Proxima
+                  </Button>
+                  <Input
+                    v-model="variableGoToPage"
+                    type="number"
+                    min="1"
+                    :max="variableTotalPages"
+                    placeholder="Pagina"
+                    class="h-8 w-24"
+                    @keyup.enter="submitVariableGoToPage"
+                  />
+                  <Button variant="secondary" size="sm" @click="submitVariableGoToPage">
+                    Ir
+                  </Button>
+                </div>
+              </div>
               <p v-else class="text-center text-muted-foreground py-6">Sem posicoes de renda variavel.</p>
             </CardContent>
           </Card>
@@ -840,7 +1082,20 @@ async function submitEvent() {
               <CardTitle>Carteira Fixa</CardTitle>
             </CardHeader>
             <CardContent>
-              <Table v-if="fixedPositions.length">
+              <div class="mb-3 flex items-center justify-end gap-2">
+                <span class="text-sm text-muted-foreground">Itens por pagina</span>
+                <Select v-model="fixedPageSize">
+                  <SelectTrigger class="h-8 w-[140px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="size in pageSizeOptions" :key="`fixed-page-size-${size}`" :value="size">
+                      {{ size }} / pagina
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Table v-if="fixedTotalItems">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Produto</TableHead>
@@ -854,7 +1109,7 @@ async function submitEvent() {
                 </TableHeader>
                 <TableBody>
                   <TableRow
-                    v-for="p in fixedPositions"
+                    v-for="p in paginatedFixedPositions"
                     :key="p.id"
                     class="cursor-pointer"
                     @click="openViewPosition(p)"
@@ -906,6 +1161,31 @@ async function submitEvent() {
                   </TableRow>
                 </TableBody>
               </Table>
+              <div v-if="fixedTotalItems" class="mt-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <p class="text-sm text-muted-foreground">
+                  Mostrando {{ fixedPageStart }}-{{ fixedPageEnd }} de {{ fixedTotalItems }} itens
+                </p>
+                <div class="flex flex-wrap items-center gap-2">
+                  <Button variant="outline" size="sm" :disabled="fixedPage <= 1" @click="setFixedPage(fixedPage - 1)">
+                    Anterior
+                  </Button>
+                  <Button variant="outline" size="sm" :disabled="fixedPage >= fixedTotalPages" @click="setFixedPage(fixedPage + 1)">
+                    Proxima
+                  </Button>
+                  <Input
+                    v-model="fixedGoToPage"
+                    type="number"
+                    min="1"
+                    :max="fixedTotalPages"
+                    placeholder="Pagina"
+                    class="h-8 w-24"
+                    @keyup.enter="submitFixedGoToPage"
+                  />
+                  <Button variant="secondary" size="sm" @click="submitFixedGoToPage">
+                    Ir
+                  </Button>
+                </div>
+              </div>
               <p v-else class="text-center text-muted-foreground py-6">Sem posicoes de renda fixa.</p>
             </CardContent>
           </Card>
@@ -917,11 +1197,24 @@ async function submitEvent() {
           <CardTitle>Lancamentos</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table v-if="filteredEvents.length">
+          <div class="mb-3 flex items-center justify-end gap-2">
+            <span class="text-sm text-muted-foreground">Itens por pagina</span>
+            <Select v-model="eventsPageSize">
+              <SelectTrigger class="h-8 w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="size in pageSizeOptions" :key="`events-page-size-${size}`" :value="size">
+                  {{ size }} / pagina
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Table v-if="eventsTotalItems">
             <TableHeader>
               <TableRow>
                 <TableHead>Data</TableHead>
-                <TableHead>Posicao</TableHead>
+                <TableHead>Ativo</TableHead>
                 <TableHead>Evento</TableHead>
                 <TableHead v-if="activeBucket === 'variable'" class="text-right">Qtd</TableHead>
                 <TableHead v-if="activeBucket === 'variable'" class="text-right">Preco Unit.</TableHead>
@@ -931,7 +1224,7 @@ async function submitEvent() {
             </TableHeader>
             <TableBody>
               <TableRow
-                v-for="e in filteredEvents"
+                v-for="e in paginatedEvents"
                 :key="e.id"
                 class="cursor-pointer"
                 @click="openViewEvent(e)"
@@ -976,27 +1269,61 @@ async function submitEvent() {
               </TableRow>
             </TableBody>
           </Table>
+          <div v-if="eventsTotalItems" class="mt-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <p class="text-sm text-muted-foreground">
+              Mostrando {{ eventsPageStart }}-{{ eventsPageEnd }} de {{ eventsTotalItems }} itens
+            </p>
+            <div class="flex flex-wrap items-center gap-2">
+              <Button variant="outline" size="sm" :disabled="eventsPage <= 1" @click="setEventsPage(eventsPage - 1)">
+                Anterior
+              </Button>
+              <Button variant="outline" size="sm" :disabled="eventsPage >= eventsTotalPages" @click="setEventsPage(eventsPage + 1)">
+                Proxima
+              </Button>
+              <Input
+                v-model="eventsGoToPage"
+                type="number"
+                min="1"
+                :max="eventsTotalPages"
+                placeholder="Pagina"
+                class="h-8 w-24"
+                @keyup.enter="submitEventsGoToPage"
+              />
+              <Button variant="secondary" size="sm" @click="submitEventsGoToPage">
+                Ir
+              </Button>
+            </div>
+          </div>
           <p v-else class="text-center text-muted-foreground py-6">Sem lancamentos nesse grupo.</p>
         </CardContent>
       </Card>
     </template>
 
-    <Dialog v-model:open="positionDialogOpen">
-      <DialogContent class="max-w-2xl">
+    </div>
+    <div
+      v-if="isProcessing"
+      class="absolute inset-0 z-20 grid place-items-center rounded-lg bg-background/45 backdrop-blur-[1px]"
+    >
+      <Spinner class="h-5 w-5" />
+    </div>
+
+    <Dialog :open="positionDialogOpen" @update:open="onPositionDialogOpenChange">
+      <DialogContent class="max-w-2xl" :show-close-button="!savingPosition">
         <DialogHeader>
           <DialogTitle>{{ positionDialogTitle }}</DialogTitle>
           <DialogDescription>
-            {{ editingPosition ? 'Atualize os dados da posicao.' : 'Cadastre a caixinha do ativo/produto.' }}
+            {{ editingPosition ? 'Atualize os dados do ativo.' : 'Cadastre a caixinha do ativo/produto.' }}
           </DialogDescription>
         </DialogHeader>
 
-        <Alert v-if="editingPositionHasEvents" variant="default">
-          <AlertDescription>
-            Conta e grupo ficam bloqueados porque essa posicao ja possui lancamentos.
-          </AlertDescription>
-        </Alert>
+        <div :class="savingPosition ? 'pointer-events-none opacity-70 transition-opacity' : 'transition-opacity'">
+          <Alert v-if="editingPositionHasEvents" variant="default">
+            <AlertDescription>
+              Conta e grupo ficam bloqueados porque esse ativo ja possui lancamentos.
+            </AlertDescription>
+          </Alert>
 
-        <div class="grid grid-cols-2 gap-4">
+          <div class="grid grid-cols-2 gap-4">
           <div class="space-y-2">
             <Label>Conta *</Label>
             <Select v-model="positionForm.accountId">
@@ -1075,16 +1402,18 @@ async function submitEvent() {
               <Input v-model="positionForm.maturity_date" type="date" />
             </div>
           </template>
+          </div>
         </div>
 
-        <Button class="w-full" @click="submitPosition">
-          {{ editingPosition ? 'Atualizar Posicao' : 'Salvar Posicao' }}
+        <Button class="w-full" :disabled="isProcessing" @click="submitPosition">
+          <Spinner v-if="savingPosition" class="h-4 w-4 mr-2" />
+          {{ savingPosition ? 'Salvando...' : (editingPosition ? 'Atualizar Ativo' : 'Salvar Ativo') }}
         </Button>
       </DialogContent>
     </Dialog>
 
-    <Dialog v-model:open="eventDialogOpen">
-      <DialogContent class="max-w-2xl">
+    <Dialog :open="eventDialogOpen" @update:open="onEventDialogOpenChange">
+      <DialogContent class="max-w-2xl" :show-close-button="!savingEvent">
         <DialogHeader>
           <DialogTitle>{{ eventDialogTitle }}</DialogTitle>
           <DialogDescription>
@@ -1092,9 +1421,12 @@ async function submitEvent() {
           </DialogDescription>
         </DialogHeader>
 
-        <div class="grid grid-cols-2 gap-4">
+        <div
+          class="grid grid-cols-2 gap-4"
+          :class="savingEvent ? 'pointer-events-none opacity-70 transition-opacity' : 'transition-opacity'"
+        >
           <div class="col-span-2 space-y-2">
-            <Label>Posicao *</Label>
+            <Label>Ativo *</Label>
             <Select v-model="eventForm.positionId">
               <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
               <SelectContent>
@@ -1105,50 +1437,53 @@ async function submitEvent() {
             </Select>
           </div>
 
-          <div class="space-y-2">
-            <Label>Data *</Label>
-            <Input v-model="eventForm.date" type="date" />
-          </div>
-
-          <div class="space-y-2">
-            <Label>Evento *</Label>
-            <Select v-model="eventForm.event_type">
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="opt in eventTypeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <template v-if="selectedPosition?.bucket === 'variable' && (eventForm.event_type === 'buy' || eventForm.event_type === 'sell')">
+          <template v-if="eventForm.positionId">
             <div class="space-y-2">
-              <Label>Quantidade *</Label>
-              <Input v-model="eventForm.quantity" placeholder="Ex: 10" />
+              <Label>Data *</Label>
+              <Input v-model="eventForm.date" type="date" />
             </div>
+
             <div class="space-y-2">
-              <Label>Preco unitario</Label>
-              <MoneyInput v-model="eventForm.unit_price" />
+              <Label>Evento *</Label>
+              <Select v-model="eventForm.event_type">
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="opt in eventTypeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <template v-if="selectedPosition?.bucket === 'variable' && (eventForm.event_type === 'buy' || eventForm.event_type === 'sell')">
+              <div class="space-y-2">
+                <Label>Quantidade *</Label>
+                <Input v-model="eventForm.quantity" placeholder="Ex: 10" />
+              </div>
+              <div class="space-y-2">
+                <Label>Preco unitario</Label>
+                <MoneyInput v-model="eventForm.unit_price" />
+              </div>
+            </template>
+
+            <div class="space-y-2">
+              <Label>Valor total *</Label>
+              <MoneyInput v-model="eventForm.amount" />
+            </div>
+
+            <div class="space-y-2">
+              <Label>Taxas</Label>
+              <MoneyInput v-model="eventForm.fees" />
+            </div>
+
+            <div class="col-span-2 space-y-2">
+              <Label>Observacao</Label>
+              <Input v-model="eventForm.note" placeholder="Opcional" />
             </div>
           </template>
-
-          <div class="space-y-2">
-            <Label>Valor total *</Label>
-            <MoneyInput v-model="eventForm.amount" />
-          </div>
-
-          <div class="space-y-2">
-            <Label>Taxas</Label>
-            <MoneyInput v-model="eventForm.fees" />
-          </div>
-
-          <div class="col-span-2 space-y-2">
-            <Label>Observacao</Label>
-            <Input v-model="eventForm.note" placeholder="Opcional" />
-          </div>
         </div>
 
-        <Button class="w-full" @click="submitEvent">
-          {{ editingEvent ? 'Atualizar Lancamento' : 'Salvar Lancamento' }}
+        <Button class="w-full" :disabled="isProcessing" @click="submitEvent">
+          <Spinner v-if="savingEvent" class="h-4 w-4 mr-2" />
+          {{ savingEvent ? 'Salvando...' : (editingEvent ? 'Atualizar Lancamento' : 'Salvar Lancamento') }}
         </Button>
       </DialogContent>
     </Dialog>
@@ -1156,13 +1491,13 @@ async function submitEvent() {
     <Dialog v-model:open="positionViewDialogOpen">
       <DialogContent class="sm:max-w-2xl max-h-[88vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Detalhes da Posicao</DialogTitle>
-          <DialogDescription>Informacoes completas da posicao.</DialogDescription>
+          <DialogTitle>Detalhes do Ativo</DialogTitle>
+          <DialogDescription>Informacoes completas do ativo.</DialogDescription>
         </DialogHeader>
         <div v-if="viewingPosition" class="space-y-4 text-sm">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
-              <p class="text-[11px] uppercase tracking-wide text-muted-foreground">Posicao</p>
+              <p class="text-[11px] uppercase tracking-wide text-muted-foreground">Ativo</p>
               <p class="mt-1 font-medium">{{ getPositionDisplay(viewingPosition) }}</p>
             </div>
             <div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
@@ -1278,7 +1613,7 @@ async function submitEvent() {
                   </TableRow>
                 </TableBody>
               </Table>
-              <p v-else class="text-xs text-muted-foreground">Nenhum lancamento para esta posicao.</p>
+              <p v-else class="text-xs text-muted-foreground">Nenhum lancamento para este ativo.</p>
             </div>
           </div>
 
@@ -1337,7 +1672,7 @@ async function submitEvent() {
               <p class="mt-1 font-medium">{{ getEventTypeLabel(viewingEvent.event_type) }}</p>
             </div>
             <div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2 sm:col-span-2">
-              <p class="text-[11px] uppercase tracking-wide text-muted-foreground">Posicao</p>
+              <p class="text-[11px] uppercase tracking-wide text-muted-foreground">Ativo</p>
               <p class="mt-1 font-medium">{{ getPositionLabel(viewingEvent.positionId) }}</p>
             </div>
             <div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2 sm:col-span-2">
@@ -1375,10 +1710,10 @@ async function submitEvent() {
       :description="`Deseja excluir '${deleteTarget?.label}'? Esta acao nao pode ser desfeita.`"
       confirm-label="Sim, excluir"
       cancel-label="Cancelar"
+      :loading="deleting"
       :destructive="true"
       @confirm="confirmDelete"
-      @cancel="confirmDeleteOpen = false"
+      @cancel="cancelDelete"
     />
   </div>
 </template>
-

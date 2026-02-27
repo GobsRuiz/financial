@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { v4 as uuid } from 'uuid'
 import type { Transaction, Recurrent } from '~/schemas/zod-schemas'
 import { apiGet, apiPost, apiPatch, apiDelete } from '~/utils/api'
-import { addMonths, monthKey } from '~/utils/dates'
+import { addMonths, monthKey, nowISO } from '~/utils/dates'
 import { computeCreditInvoiceDueDate } from '~/utils/invoice-cycle'
 import { useAccountsStore } from './useAccounts'
 
@@ -127,6 +127,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
       ...tx,
       id: uuid(),
       paid,
+      createdAt: nowISO(),
     })
     transactions.value.push(created)
     return created
@@ -171,6 +172,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
           index: i,
           product: base.product,
         },
+        createdAt: nowISO(),
       })
       created.push(tx)
       transactions.value.push(tx)
@@ -221,37 +223,66 @@ export const useTransactionsStore = defineStore('transactions', () => {
 
   async function updateTransaction(id: string, patch: Partial<Transaction>) {
     const old = transactions.value.find(t => t.id === id)
-    const wasPaid = old?.paid ?? false
-    const oldAmount = old?.amount_cents ?? 0
-    const oldAccountId = old?.accountId
 
     const updated = await apiPatch<Transaction>(`/transactions/${id}`, patch)
     const idx = transactions.value.findIndex(t => t.id === id)
     if (idx !== -1) transactions.value[idx] = updated
 
-    const accountsStore = useAccountsStore()
-    const label = updated.description || 'Transacao'
+    // Sem snapshot anterior em memoria, nao ha como calcular diferenca de saldo com seguranca.
+    if (!old) return updated
 
-    // Se estava pago → estornar valor antigo da conta antiga
-    if (wasPaid && oldAccountId != null) {
-      await accountsStore.adjustBalance(oldAccountId, -oldAmount, `Estorno edição - ${label}`)
+    const accountsStore = useAccountsStore()
+    const oldApplied = old.paid ? old.amount_cents : 0
+    const newApplied = updated.paid ? updated.amount_cents : 0
+
+    if (old.accountId === updated.accountId) {
+      const delta = newApplied - oldApplied
+      if (delta !== 0) {
+        const label = updated.description || old.description || 'Transacao'
+        await accountsStore.adjustBalance(updated.accountId, delta, `Ajuste edicao - ${label}`)
+      }
+      return updated
     }
 
-    // Se agora está pago → aplicar valor novo na conta nova
-    if (updated.paid) {
-      await accountsStore.adjustBalance(updated.accountId, updated.amount_cents, label)
+    // Conta alterada: remove impacto da conta antiga e aplica na nova, se houver.
+    if (oldApplied !== 0) {
+      const oldLabel = old.description || 'Transacao'
+      await accountsStore.adjustBalance(old.accountId, -oldApplied, `Estorno edicao - ${oldLabel}`)
+    }
+    if (newApplied !== 0) {
+      const newLabel = updated.description || 'Transacao'
+      await accountsStore.adjustBalance(updated.accountId, newApplied, newLabel)
     }
 
     return updated
   }
 
+  function isPaidCreditTransaction(tx: Transaction) {
+    return tx.payment_method === 'credit' && tx.paid
+  }
+
+  function hasPaidCreditInInstallmentGroup(parentId: string) {
+    return transactions.value.some(t =>
+      t.installment?.parentId === parentId && isPaidCreditTransaction(t),
+    )
+  }
+
   async function deleteTransaction(id: string) {
+    const tx = transactions.value.find(t => t.id === id)
+    if (tx && isPaidCreditTransaction(tx)) {
+      throw new Error('Transacoes de credito pagas nao podem ser excluidas.')
+    }
+
     await apiDelete(`/transactions/${id}`)
     transactions.value = transactions.value.filter(t => t.id !== id)
   }
 
   /** Exclui todas as parcelas de um grupo (mesmo parentId) */
   async function deleteInstallmentGroup(parentId: string) {
+    if (hasPaidCreditInInstallmentGroup(parentId)) {
+      throw new Error('O grupo possui parcela de credito ja paga e nao pode ser excluido.')
+    }
+
     const parcelas = transactions.value.filter(t => t.installment?.parentId === parentId)
     for (const p of parcelas) {
       await apiDelete(`/transactions/${p.id}`)
@@ -266,6 +297,8 @@ export const useTransactionsStore = defineStore('transactions', () => {
     updateTransaction,
     deleteTransaction,
     deleteInstallmentGroup,
+    isPaidCreditTransaction,
+    hasPaidCreditInInstallmentGroup,
     generateInstallments,
     markPaid,
     markUnpaid,

@@ -28,6 +28,7 @@ export const paymentMethodSchema = z.enum(['debit', 'credit'])
 export const transactionSchema = z.object({
   id: z.string().uuid().optional(),
   accountId: z.number().int({ message: 'Conta é obrigatória' }),
+  destinationAccountId: z.number().int().optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida (YYYY-MM-DD)'),
   type: z.enum(['expense', 'income', 'transfer'], { message: 'Tipo é obrigatório' }),
   payment_method: paymentMethodSchema.optional(),
@@ -36,6 +37,7 @@ export const transactionSchema = z.object({
   paid: z.boolean().default(false),
   installment: installmentSchema.nullable().optional(),
   recurrentId: z.string().uuid().optional(),
+  createdAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 })
 
 export type Transaction = z.infer<typeof transactionSchema> & { id: string }
@@ -143,14 +145,6 @@ export const investmentSchema = z.object({
 })
 
 export type Investment = z.infer<typeof investmentSchema> & { id: string }
-
-// ── Tag ──
-export const tagSchema = z.object({
-  id: z.string().optional(),
-  name: z.string().min(1, 'Nome é obrigatório'),
-})
-
-export type Tag = z.infer<typeof tagSchema> & { id: string }
 
 // ── History ──
 export const historySchema = z.object({
