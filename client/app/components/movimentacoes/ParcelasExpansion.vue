@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import dayjs from 'dayjs'
 import { Check } from 'lucide-vue-next'
 import type { Transaction } from '~/schemas/zod-schemas'
 import { useAppToast } from '~/composables/useAppToast'
@@ -21,6 +22,12 @@ const parcelas = computed(() =>
     .filter(t => t.installment?.parentId === props.parentId)
     .sort((a, b) => (a.installment?.index ?? 0) - (b.installment?.index ?? 0))
 )
+
+function formatDisplayDate(date: string) {
+  return dayjs(date).isValid()
+    ? dayjs(date).format('DD/MM/YYYY')
+    : date
+}
 
 function markRecentlyPaid(id: string) {
   const next = new Set(recentlyPaidIds.value)
@@ -69,7 +76,7 @@ async function togglePaid(tx: Transaction, checked: boolean | 'indeterminate') {
   } catch (e: any) {
     appToast.error({
       title: 'Erro ao atualizar parcela',
-      description: e?.message || 'Nao foi possivel atualizar o status da parcela.',
+      description: e?.message || 'Não foi possível atualizar o status da parcela.',
     })
   } finally {
     processingId.value = null
@@ -103,7 +110,7 @@ async function togglePaid(tx: Transaction, checked: boolean | 'indeterminate') {
         >
           Parcela {{ p.installment?.index }}/{{ p.installment?.total }}
         </span>
-        <span class="text-muted-foreground text-xs">{{ p.date }}</span>
+        <span class="text-muted-foreground text-xs">{{ formatDisplayDate(p.date) }}</span>
       </div>
       <div class="flex items-center gap-2">
         <span :class="p.amount_cents < 0 ? 'text-red-500' : 'text-green-500'">

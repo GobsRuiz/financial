@@ -1,12 +1,13 @@
 <script setup lang="ts">
+import dayjs from 'dayjs'
 import { ChevronDown, ChevronRight, Filter, ChevronsUpDown, X, MoreHorizontal, Pencil, Trash2, Eye } from 'lucide-vue-next'
-import type { Transaction, Recurrent, InvestmentEvent } from '~/schemas/zod-schemas'
+import type { Transaction, Recurrent, InvestmentEvent, InvestmentPosition } from '~/schemas/zod-schemas'
 import { useTransactionsStore } from '~/stores/useTransactions'
 import { useRecurrentsStore } from '~/stores/useRecurrents'
 import { useInvestmentPositionsStore } from '~/stores/useInvestmentPositions'
 import { useInvestmentEventsStore } from '~/stores/useInvestmentEvents'
 import { useAccountsStore } from '~/stores/useAccounts'
-import { formatCentsToBRL } from '~/utils/money'
+import { parseBRLToCents, formatCentsToBRL } from '~/utils/money'
 import { monthKey, nowISO } from '~/utils/dates'
 import { useAppToast } from '~/composables/useAppToast'
 
@@ -38,8 +39,9 @@ const invFiltersOpen = ref(false)
 const activeTab = ref<MovimentacoesTab>(props.initialTab)
 
 // ── Filtros Transações ──
+const txDefaultMonth = monthKey(nowISO())
 const txFilterConta = ref<number | null>(null)
-const txFilterMes = ref(monthKey(nowISO()))
+const txFilterMes = ref(txDefaultMonth)
 const txFilterStatus = ref<'todos' | 'pago' | 'pendente'>('todos')
 
 // ── Filtros Recorrentes ──
@@ -48,6 +50,30 @@ const recFilterStatus = ref<'todos' | 'ativo' | 'inativo'>('todos')
 
 // ── Filtros Investimentos ──
 const invFilterConta = ref<number | null>(null)
+const investmentEventTypeOptionsVariable = [
+  { label: 'Compra', value: 'buy' },
+  { label: 'Venda', value: 'sell' },
+  { label: 'Rendimento', value: 'income' },
+] as const
+const investmentEventTypeOptionsFixed = [
+  { label: 'Aporte', value: 'contribution' },
+  { label: 'Resgate', value: 'withdrawal' },
+  { label: 'Rendimento', value: 'income' },
+  { label: 'Vencimento', value: 'maturity' },
+] as const
+const investmentEventDialogOpen = ref(false)
+const editingInvestmentEvent = ref<InvestmentEvent | null>(null)
+const savingInvestmentEvent = ref(false)
+const investmentEventForm = reactive({
+  positionId: '',
+  date: nowISO(),
+  event_type: 'buy' as InvestmentEvent['event_type'],
+  quantity: '',
+  unit_price: '',
+  amount: '',
+  fees: '',
+  note: '',
+})
 
 // Expand state para parcelas
 const expandedParents = ref<Set<string>>(new Set())
@@ -55,8 +81,32 @@ const expandedParents = ref<Set<string>>(new Set())
 // ── Visualização Transação ──
 const viewingTransaction = ref<Transaction | null>(null)
 const transactionViewDialogOpen = ref(false)
-const processingAction = ref<'delete' | null>(null)
-const isProcessing = computed(() => processingAction.value !== null)
+const processingAction = ref<'delete' | 'mark-unpaid' | null>(null)
+const isProcessing = computed(() => processingAction.value !== null || savingInvestmentEvent.value)
+const deleteInstallmentProgress = ref(0)
+const deleteInstallmentTotal = ref(0)
+const showDeleteInstallmentModal = ref(false)
+
+const deleteInstallmentPercent = computed(() => {
+  if (!deleteInstallmentTotal.value) return 0
+  return Math.round((deleteInstallmentProgress.value / deleteInstallmentTotal.value) * 100)
+})
+
+const deleteInstallmentCurrentStep = computed(() => {
+  if (!deleteInstallmentTotal.value) return 0
+  if (deleteInstallmentProgress.value >= deleteInstallmentTotal.value) return deleteInstallmentTotal.value
+  return deleteInstallmentProgress.value + 1
+})
+
+const deleteInstallmentCurrentLabel = computed(() => {
+  if (!deleteInstallmentTotal.value) return 'Excluindo parcelas...'
+  return `Excluindo parcela ${deleteInstallmentCurrentStep.value} de ${deleteInstallmentTotal.value}...`
+})
+
+const deleteInstallmentStepMeta = computed(() => {
+  if (!deleteInstallmentTotal.value) return ''
+  return `Etapa ${deleteInstallmentCurrentStep.value} de ${deleteInstallmentTotal.value}`
+})
 
 function openViewTransaction(tx: Transaction) {
   if (isProcessing.value) return
@@ -102,6 +152,71 @@ function getPositionBucketLabel(positionId: string) {
   return p.bucket === 'variable' ? 'Renda Variável' : 'Renda Fixa'
 }
 
+const selectedInvestmentPosition = computed(() =>
+  investmentPositionsStore.positions.find(pos => pos.id === investmentEventForm.positionId),
+)
+
+const availableSellQuantity = computed(() => {
+  const position = selectedInvestmentPosition.value
+  if (!position || position.bucket !== 'variable') return 0
+  return getEffectiveAvailableQuantityForSell(position)
+})
+
+const investmentEventTypeOptions = computed(() => {
+  const position = selectedInvestmentPosition.value
+  if (position?.bucket === 'fixed') {
+    if (position.investment_type === 'caixinha') {
+      return investmentEventTypeOptionsFixed.filter(opt => opt.value !== 'maturity')
+    }
+    return investmentEventTypeOptionsFixed
+  }
+  return investmentEventTypeOptionsVariable
+})
+
+function formatDisplayDate(date: string) {
+  return dayjs(date).isValid()
+    ? dayjs(date).format('DD/MM/YYYY')
+    : date
+}
+
+function formatCentsToInput(cents?: number) {
+  if (cents == null) return ''
+  return new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(cents / 100)
+}
+
+function formatQuantityDisplay(quantity: number) {
+  return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 8 }).format(quantity)
+}
+
+function getEffectiveAvailableQuantityForSell(position: InvestmentPosition) {
+  let available = position.quantity_total ?? 0
+
+  if (editingInvestmentEvent.value && editingInvestmentEvent.value.positionId === position.id) {
+    const originalQty = editingInvestmentEvent.value.quantity ?? 0
+    if (editingInvestmentEvent.value.event_type === 'sell') {
+      available += originalQty
+    } else if (editingInvestmentEvent.value.event_type === 'buy') {
+      available -= originalQty
+    }
+  }
+
+  return Math.max(0, available)
+}
+
+function resetInvestmentEventForm() {
+  investmentEventForm.positionId = ''
+  investmentEventForm.date = nowISO()
+  investmentEventForm.event_type = 'buy'
+  investmentEventForm.quantity = ''
+  investmentEventForm.unit_price = ''
+  investmentEventForm.amount = ''
+  investmentEventForm.fees = ''
+  investmentEventForm.note = ''
+}
+
 // ── Ações ──
 function requestDelete(type: 'transaction' | 'installment-group' | 'recurrent' | 'investment-event', id: string, label: string) {
   if (isProcessing.value) return
@@ -114,8 +229,8 @@ function requestDeleteTransaction(tx: Transaction) {
   if (tx.installment?.parentId) {
     if (transactionsStore.hasPaidCreditInInstallmentGroup(tx.installment.parentId)) {
       appToast.warning({
-        title: 'Exclusao bloqueada',
-        description: 'Nao e possivel excluir grupo com parcela de credito ja paga.',
+        title: 'Exclusão bloqueada',
+        description: 'Não é possível excluir grupo com parcela de crédito já paga.',
       })
       return
     }
@@ -126,8 +241,8 @@ function requestDeleteTransaction(tx: Transaction) {
 
   if (transactionsStore.isPaidCreditTransaction(tx)) {
     appToast.warning({
-      title: 'Exclusao bloqueada',
-      description: 'Transacoes de credito ja pagas nao podem ser excluidas.',
+      title: 'Exclusão bloqueada',
+      description: 'Transações de crédito já pagas não podem ser excluídas.',
     })
     return
   }
@@ -140,9 +255,52 @@ function editTransaction(tx: Transaction) {
   emit('edit-transaction', tx)
 }
 
+function canMarkUnpaidTransaction(tx: Transaction) {
+  return tx.paid && !tx.installment && tx.type !== 'transfer'
+}
+
+async function markTransactionUnpaid(tx: Transaction) {
+  if (isProcessing.value || !canMarkUnpaidTransaction(tx)) return
+  processingAction.value = 'mark-unpaid'
+
+  try {
+    await transactionsStore.markUnpaid(tx.id)
+    appToast.success({
+      title: 'Pagamento desfeito',
+      description: `${tx.description || 'Transacao'} marcada como pendente.`,
+    })
+  } catch (e: any) {
+    appToast.error({
+      title: 'Erro ao desfazer pagamento',
+      description: e?.message || 'Não foi possível desfazer o pagamento.',
+    })
+  } finally {
+    processingAction.value = null
+  }
+}
+
 function editRecurrent(rec: Recurrent) {
   if (isProcessing.value) return
   emit('edit-recurrent', rec)
+}
+
+function openEditInvestmentEvent(event: InvestmentEvent) {
+  if (isProcessing.value) return
+  editingInvestmentEvent.value = event
+  investmentEventForm.positionId = event.positionId
+  investmentEventForm.date = event.date
+  investmentEventForm.event_type = event.event_type
+  investmentEventForm.quantity = event.quantity != null ? String(event.quantity).replace('.', ',') : ''
+  investmentEventForm.unit_price = formatCentsToInput(event.unit_price_cents)
+  investmentEventForm.amount = formatCentsToInput(event.amount_cents)
+  investmentEventForm.fees = formatCentsToInput(event.fees_cents)
+  investmentEventForm.note = event.note ?? ''
+  investmentEventDialogOpen.value = true
+}
+
+function onInvestmentEventDialogOpenChange(open: boolean) {
+  if (!open && savingInvestmentEvent.value) return
+  investmentEventDialogOpen.value = open
 }
 
 function cancelDelete() {
@@ -150,6 +308,28 @@ function cancelDelete() {
   confirmDeleteOpen.value = false
   deleteTarget.value = null
 }
+
+function openDeleteInstallmentModal(total: number) {
+  deleteInstallmentTotal.value = total
+  deleteInstallmentProgress.value = 0
+  showDeleteInstallmentModal.value = true
+}
+
+function closeDeleteInstallmentModal() {
+  showDeleteInstallmentModal.value = false
+  deleteInstallmentProgress.value = 0
+  deleteInstallmentTotal.value = 0
+}
+
+onBeforeRouteLeave(() => {
+  if (!showDeleteInstallmentModal.value) return true
+
+  appToast.warning({
+    title: 'Operação em andamento',
+    description: 'Aguarde a conclusão. A navegação e os cliques estão temporariamente bloqueados.',
+  })
+  return false
+})
 
 async function confirmDelete() {
   if (!deleteTarget.value || isProcessing.value) return
@@ -160,7 +340,12 @@ async function confirmDelete() {
     if (type === 'transaction') {
       await transactionsStore.deleteTransaction(id)
     } else if (type === 'installment-group') {
-      await transactionsStore.deleteInstallmentGroup(id)
+      const total = transactionsStore.transactions.filter(tx => tx.installment?.parentId === id).length
+      openDeleteInstallmentModal(total)
+      await transactionsStore.deleteInstallmentGroup(id, (current, totalItems) => {
+        deleteInstallmentProgress.value = current
+        deleteInstallmentTotal.value = totalItems
+      })
     } else if (type === 'recurrent') {
       await recurrentsStore.deleteRecurrent(id)
     } else {
@@ -170,9 +355,63 @@ async function confirmDelete() {
   } catch (e: any) {
     appToast.error({ title: 'Erro ao excluir', description: e.message })
   } finally {
+    closeDeleteInstallmentModal()
     processingAction.value = null
     confirmDeleteOpen.value = false
     deleteTarget.value = null
+  }
+}
+
+async function submitInvestmentEvent() {
+  if (isProcessing.value) return
+  if (!editingInvestmentEvent.value) return
+  savingInvestmentEvent.value = true
+
+  try {
+    if (!investmentEventForm.positionId) throw new Error('Selecione um ativo')
+    if (!investmentEventForm.date) throw new Error('Informe a data')
+    if (!investmentEventForm.amount) throw new Error('Informe o valor total')
+
+    const position = selectedInvestmentPosition.value
+    if (!position) throw new Error('Ativo invalido')
+
+    if (position.investment_type === 'caixinha' && investmentEventForm.event_type === 'maturity') {
+      throw new Error('Evento vencimento nao esta disponivel para caixinha')
+    }
+
+    if (position.bucket === 'variable' && (investmentEventForm.event_type === 'buy' || investmentEventForm.event_type === 'sell')) {
+      const qty = Number(investmentEventForm.quantity.replace(',', '.'))
+      if (!Number.isFinite(qty) || qty <= 0) throw new Error('Informe a quantidade')
+      if (investmentEventForm.event_type === 'sell') {
+        const availableQty = getEffectiveAvailableQuantityForSell(position)
+        if (qty > availableQty) {
+          throw new Error(`Voce possui apenas ${formatQuantityDisplay(availableQty)} cotas`)
+        }
+      }
+    }
+
+    const payload = {
+      positionId: position.id,
+      accountId: position.accountId,
+      date: investmentEventForm.date,
+      event_type: investmentEventForm.event_type,
+      amount_cents: parseBRLToCents(investmentEventForm.amount),
+      quantity: investmentEventForm.quantity ? Number(investmentEventForm.quantity.replace(',', '.')) : undefined,
+      unit_price_cents: investmentEventForm.unit_price ? parseBRLToCents(investmentEventForm.unit_price) : undefined,
+      fees_cents: investmentEventForm.fees ? parseBRLToCents(investmentEventForm.fees) : undefined,
+      note: investmentEventForm.note || undefined,
+    }
+
+    await investmentEventsStore.updateEvent(editingInvestmentEvent.value.id, payload)
+    appToast.success({ title: 'Lancamento atualizado' })
+    investmentEventDialogOpen.value = false
+  } catch (e: any) {
+    appToast.error({
+      title: 'Erro ao atualizar lancamento',
+      description: e?.message || 'Nao foi possivel atualizar o lancamento.',
+    })
+  } finally {
+    savingInvestmentEvent.value = false
   }
 }
 
@@ -278,7 +517,7 @@ const recStatusOptions = [
 ]
 
 const hasTxFilters = computed(() =>
-  txFilterConta.value !== null || txFilterMes.value !== '' || txFilterStatus.value !== 'todos'
+  txFilterConta.value !== null || txFilterMes.value !== txDefaultMonth || txFilterStatus.value !== 'todos'
 )
 const hasRecFilters = computed(() =>
   recFilterConta.value !== null || recFilterStatus.value !== 'todos'
@@ -290,7 +529,7 @@ const hasInvFilters = computed(() =>
 function clearTxFilters() {
   if (isProcessing.value) return
   txFilterConta.value = null
-  txFilterMes.value = ''
+  txFilterMes.value = txDefaultMonth
   txFilterStatus.value = 'todos'
 }
 function clearRecFilters() {
@@ -417,6 +656,37 @@ watch([recFilterConta, recFilterStatus], () => {
 watch(invFilterConta, () => {
   invPage.value = 1
   invGoToPage.value = ''
+})
+
+watch(() => investmentEventForm.positionId, () => {
+  const position = selectedInvestmentPosition.value
+  if (!position) return
+
+  const validTypes = position.bucket === 'fixed'
+    ? ['contribution', 'withdrawal', 'income', 'maturity']
+    : ['buy', 'sell', 'income']
+
+  if (!validTypes.includes(investmentEventForm.event_type)) {
+    investmentEventForm.event_type = position.bucket === 'fixed' ? 'contribution' : 'buy'
+  }
+})
+
+watch(() => [investmentEventForm.quantity, investmentEventForm.unit_price], () => {
+  if (!selectedInvestmentPosition.value || selectedInvestmentPosition.value.bucket !== 'variable') return
+  if (!investmentEventForm.quantity || !investmentEventForm.unit_price) return
+
+  const qty = Number(investmentEventForm.quantity.replace(',', '.'))
+  if (!Number.isFinite(qty) || qty <= 0) return
+
+  const cents = parseBRLToCents(investmentEventForm.unit_price)
+  investmentEventForm.amount = formatCentsToBRL(Math.round(qty * cents))
+})
+
+watch(investmentEventDialogOpen, (open) => {
+  if (!open) {
+    editingInvestmentEvent.value = null
+    resetInvestmentEventForm()
+  }
 })
 
 watch([txPageSize, txTotalPages], () => {
@@ -576,7 +846,7 @@ defineExpose({
                     <Badge v-if="tx.paid" variant="outline" class="text-green-500 border-green-500/30">Pago</Badge>
                     <Badge v-else variant="outline" class="text-yellow-500 border-yellow-500/30">Pendente</Badge>
                   </TableCell>
-                  <TableCell>{{ tx.date }}</TableCell>
+                  <TableCell>{{ formatDisplayDate(tx.date) }}</TableCell>
                   <TableCell>
                     <DropdownMenu>
                       <DropdownMenuTrigger as-child>
@@ -592,6 +862,14 @@ defineExpose({
                         <DropdownMenuItem :disabled="isProcessing" @click.stop="editTransaction(tx)">
                           <Pencil class="h-4 w-4 mr-2" />
                           Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          v-if="canMarkUnpaidTransaction(tx)"
+                          :disabled="isProcessing"
+                          @click.stop="markTransactionUnpaid(tx)"
+                        >
+                          <X class="h-4 w-4 mr-2" />
+                          Desfazer pagamento
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           :disabled="isProcessing"
@@ -870,7 +1148,7 @@ defineExpose({
             </TableHeader>
             <TableBody>
               <TableRow v-for="inv in paginatedInvestments" :key="inv.id">
-                <TableCell>{{ inv.date }}</TableCell>
+                <TableCell>{{ formatDisplayDate(inv.date) }}</TableCell>
                 <TableCell>{{ getPositionLabel(inv.positionId) }}</TableCell>
                 <TableCell><Badge variant="secondary">{{ getPositionBucketLabel(inv.positionId) }}</Badge></TableCell>
                 <TableCell>{{ getAccountLabel(inv.accountId) }}</TableCell>
@@ -886,6 +1164,10 @@ defineExpose({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem :disabled="isProcessing" @click.stop="openEditInvestmentEvent(inv)">
+                        <Pencil class="h-4 w-4 mr-2" />
+                        Editar
+                      </DropdownMenuItem>
                       <DropdownMenuItem
                         :disabled="isProcessing"
                         variant="destructive"
@@ -934,13 +1216,36 @@ defineExpose({
   </Card>
   </div>
   <div
-    v-if="isProcessing"
+    v-if="isProcessing && !showDeleteInstallmentModal"
     class="absolute inset-0 z-20 grid place-items-center rounded-lg bg-background/45 backdrop-blur-[1px]"
   >
     <Spinner class="h-5 w-5" />
   </div>
 
-  <!-- Modal Visualização Transação -->
+  <!-- Modal de bloqueio com progresso -->
+  <div
+    v-if="showDeleteInstallmentModal"
+    class="fixed inset-0 z-[200] bg-background/80 backdrop-blur-[1px] cursor-wait"
+  >
+    <div class="absolute inset-0" />
+    <div class="absolute inset-x-0 top-20 px-4">
+      <Card class="mx-auto max-w-2xl border-primary/30 shadow-lg">
+        <CardContent class="pt-6 space-y-3">
+          <div class="flex items-center gap-2">
+            <Spinner class="h-4 w-4 text-primary" />
+            <p class="font-medium">Operação em andamento</p>
+          </div>
+          <p class="text-sm text-muted-foreground">
+            Aguarde a conclusão. A navegação e os cliques estão temporariamente bloqueados.
+          </p>
+          <Progress :model-value="deleteInstallmentPercent" class="h-2" />
+          <p class="text-sm font-medium">{{ deleteInstallmentCurrentLabel }}</p>
+          <p class="text-xs text-muted-foreground">{{ deleteInstallmentStepMeta }}</p>
+        </CardContent>
+      </Card>
+    </div>
+  </div>
+  <!-- Modal Visualizacao Transacao -->
   <Dialog v-model:open="transactionViewDialogOpen">
     <DialogContent class="max-w-lg">
       <DialogHeader>
@@ -973,7 +1278,7 @@ defineExpose({
           </div>
           <div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
             <p class="text-[11px] uppercase tracking-wide text-muted-foreground">Data</p>
-            <p class="mt-1 font-medium">{{ viewingTransaction.date }}</p>
+            <p class="mt-1 font-medium">{{ formatDisplayDate(viewingTransaction.date) }}</p>
           </div>
           <div v-if="viewingTransaction.type === 'transfer' && viewingTransaction.destinationAccountId" class="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
             <p class="text-[11px] uppercase tracking-wide text-muted-foreground">Conta Origem</p>
@@ -1058,6 +1363,89 @@ defineExpose({
     </DialogContent>
   </Dialog>
 
+  <!-- Modal Edicao Evento de Investimento -->
+  <Dialog :open="investmentEventDialogOpen" @update:open="onInvestmentEventDialogOpenChange">
+    <DialogContent class="max-w-2xl" :show-close-button="!savingInvestmentEvent">
+      <DialogHeader>
+        <DialogTitle>Editar Lancamento</DialogTitle>
+        <DialogDescription>Atualize os dados do evento de investimento.</DialogDescription>
+      </DialogHeader>
+
+      <div
+        class="grid grid-cols-2 gap-4"
+        :class="savingInvestmentEvent ? 'pointer-events-none opacity-70 transition-opacity' : 'transition-opacity'"
+      >
+        <div class="col-span-2 space-y-2">
+          <Label>Ativo *</Label>
+          <Select v-model="investmentEventForm.positionId">
+            <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="position in investmentPositionsStore.positions" :key="position.id" :value="position.id">
+                {{ getPositionLabel(position.id) }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <template v-if="investmentEventForm.positionId">
+          <div class="space-y-2">
+            <Label>Data *</Label>
+            <Input v-model="investmentEventForm.date" type="date" />
+          </div>
+
+          <div class="space-y-2">
+            <Label>Evento *</Label>
+            <Select v-model="investmentEventForm.event_type">
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="opt in investmentEventTypeOptions" :key="opt.value" :value="opt.value">
+                  {{ opt.label }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <template v-if="selectedInvestmentPosition?.bucket === 'variable' && (investmentEventForm.event_type === 'buy' || investmentEventForm.event_type === 'sell')">
+            <div class="space-y-2">
+              <Label>Quantidade *</Label>
+              <Input v-model="investmentEventForm.quantity" placeholder="Ex: 10" />
+              <p
+                v-if="investmentEventForm.event_type === 'sell'"
+                class="text-xs text-muted-foreground"
+              >
+                Disponivel: {{ formatQuantityDisplay(availableSellQuantity) }} cotas
+              </p>
+            </div>
+            <div class="space-y-2">
+              <Label>Preco unitario</Label>
+              <MoneyInput v-model="investmentEventForm.unit_price" />
+            </div>
+          </template>
+
+          <div class="space-y-2">
+            <Label>Valor total *</Label>
+            <MoneyInput v-model="investmentEventForm.amount" />
+          </div>
+
+          <div class="space-y-2">
+            <Label>Taxas</Label>
+            <MoneyInput v-model="investmentEventForm.fees" />
+          </div>
+
+          <div class="col-span-2 space-y-2">
+            <Label>Observação</Label>
+            <Input v-model="investmentEventForm.note" placeholder="Opcional" />
+          </div>
+        </template>
+      </div>
+
+      <Button class="w-full" :disabled="isProcessing" @click="submitInvestmentEvent">
+        <Spinner v-if="savingInvestmentEvent" class="h-4 w-4 mr-2" />
+        {{ savingInvestmentEvent ? 'Salvando...' : 'Atualizar Lancamento' }}
+      </Button>
+    </DialogContent>
+  </Dialog>
+
   <!-- Confirm Delete Dialog -->
   <ConfirmDialog
     :open="confirmDeleteOpen"
@@ -1072,5 +1460,3 @@ defineExpose({
   />
   </div>
 </template>
-
-

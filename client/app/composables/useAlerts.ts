@@ -7,10 +7,12 @@ import { monthKey } from '~/utils/dates'
 import { computeCreditInvoiceDueDate } from '~/utils/invoice-cycle'
 
 export type AlertBucket = 'overdue' | 'today' | 'next'
-export type AlertKind = 'recurrent' | 'invoice_due' | 'invoice_closing'
+export type AlertType = 'recurrent' | 'invoice_due' | 'invoice_closing'
+export type AlertKind = 'income' | 'expense'
 
 export interface AlertItem {
   id: string
+  alertType: AlertType
   kind: AlertKind
   bucket: AlertBucket
   accountId: number
@@ -45,6 +47,14 @@ function dateForDayInCurrentMonth(base: dayjs.Dayjs, day: number): string {
   const month = base.month() + 1
   const safeDay = clampDay(year, month, day)
   return dayjs(new Date(year, month - 1, safeDay)).format('YYYY-MM-DD')
+}
+
+function dateForNextMonthlyOccurrence(base: dayjs.Dayjs, day: number): string {
+  const currentMonthDate = dayjs(dateForDayInCurrentMonth(base, day)).startOf('day')
+  if (currentMonthDate.isBefore(base.startOf('day'))) {
+    return dateForDayInCurrentMonth(base.add(1, 'month'), day)
+  }
+  return currentMonthDate.format('YYYY-MM-DD')
 }
 
 function toBucket(daysUntil: number): AlertBucket | null {
@@ -187,7 +197,7 @@ export function useAlerts() {
       const day = rec.kind === 'expense' ? rec.due_day : rec.day_of_month
       if (!day) continue
 
-      const targetDate = dateForDayInCurrentMonth(today.value, day)
+      const targetDate = dateForNextMonthlyOccurrence(today.value, day)
       const daysUntil = dayjs(targetDate).startOf('day').diff(today.value, 'day')
       const bucket = toBucket(daysUntil)
       if (!bucket) continue
@@ -201,7 +211,8 @@ export function useAlerts() {
 
       items.push({
         id: `recurrent:${rec.id}:${targetDate}`,
-        kind: 'recurrent',
+        alertType: 'recurrent',
+        kind: rec.kind === 'income' ? 'income' : 'expense',
         bucket,
         accountId: rec.accountId,
         accountLabel,
@@ -226,7 +237,8 @@ export function useAlerts() {
 
       items.push({
         id: `invoice_due:${account.id}:${candidate.targetDate}`,
-        kind: 'invoice_due',
+        alertType: 'invoice_due',
+        kind: 'expense',
         bucket: candidate.bucket,
         accountId: account.id,
         accountLabel: account.label,
@@ -255,7 +267,8 @@ export function useAlerts() {
 
       items.push({
         id: `invoice_closing:${account.id}:${targetDate}`,
-        kind: 'invoice_closing',
+        alertType: 'invoice_closing',
+        kind: 'expense',
         bucket,
         accountId: account.id,
         accountLabel: account.label,

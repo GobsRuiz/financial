@@ -51,14 +51,14 @@ function bucketLabel(item: AlertItem): string {
 }
 
 function itemVisual(item: AlertItem) {
-  if (item.kind === 'invoice_due') {
+  if (item.alertType === 'invoice_due') {
     return {
       icon: CreditCard,
       iconClass: 'text-foreground border-border bg-muted/60',
     }
   }
 
-  if (item.kind === 'invoice_closing') {
+  if (item.alertType === 'invoice_closing') {
     return {
       icon: CalendarClock,
       iconClass: 'text-foreground border-border bg-muted/60',
@@ -72,7 +72,7 @@ function itemVisual(item: AlertItem) {
 }
 
 function isIncome(item: AlertItem): boolean {
-  return item.kind === 'recurrent' && item.subtitle.toLowerCase().includes('receita')
+  return item.kind === 'income'
 }
 
 function formattedAmount(item: AlertItem): string {

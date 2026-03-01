@@ -113,7 +113,7 @@ function urgencyLabel(item: AlertItem): string {
 }
 
 function itemVisual(item: AlertItem) {
-  if (item.kind === 'invoice_due') {
+  if (item.alertType === 'invoice_due') {
     return {
       icon: CreditCard,
       label: 'Fatura - Vencimento',
@@ -122,7 +122,7 @@ function itemVisual(item: AlertItem) {
     }
   }
 
-  if (item.kind === 'invoice_closing') {
+  if (item.alertType === 'invoice_closing') {
     return {
       icon: CalendarClock,
       label: 'Fatura - Fechamento',
@@ -140,7 +140,7 @@ function itemVisual(item: AlertItem) {
 }
 
 function isIncome(item: AlertItem): boolean {
-  return item.kind === 'recurrent' && item.subtitle.toLowerCase().includes('receita')
+  return item.kind === 'income'
 }
 
 function amountClass(item: AlertItem): string {
@@ -188,7 +188,7 @@ function formattedAmount(item: AlertItem): string {
         <template v-else>
           <template v-if="hasFatalLoadError">
             <div class="space-y-3">
-              <p class="font-semibold text-red-500">Nao foi possivel carregar alertas</p>
+              <p class="font-semibold text-red-500">Não foi possível carregar alertas</p>
               <p class="text-sm text-muted-foreground">
                 {{ loadErrorMessage || 'Verifique o servidor/API e tente novamente.' }}
               </p>

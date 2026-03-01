@@ -4,7 +4,7 @@ import { v4 as uuid } from 'uuid'
 import type { Transaction, Recurrent } from '~/schemas/zod-schemas'
 import { apiGet, apiPost, apiPatch, apiDelete } from '~/utils/api'
 import { addMonths, monthKey, nowISO } from '~/utils/dates'
-import { computeCreditInvoiceDueDate } from '~/utils/invoice-cycle'
+import { computeCreditInvoiceCycleMonth } from '~/utils/invoice-cycle'
 import { useAccountsStore } from './useAccounts'
 
 export const useTransactionsStore = defineStore('transactions', () => {
@@ -70,8 +70,8 @@ export const useTransactionsStore = defineStore('transactions', () => {
       const account = accountById.get(tx.accountId)
       if (!account?.card_due_day) continue
 
-      const dueDate = computeCreditInvoiceDueDate(tx.date, account.card_due_day, account.card_closing_day)
-      if (!dueDate || dueDate.slice(0, 7) !== month) continue
+      const cycleMonth = computeCreditInvoiceCycleMonth(tx.date, account.card_closing_day)
+      if (!cycleMonth || cycleMonth !== month) continue
 
       if (status === 'open' && tx.paid) continue
       if (status === 'paid' && !tx.paid) continue
@@ -142,6 +142,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
     date: string
     type: Transaction['type']
     payment_method?: 'debit' | 'credit'
+    totalAmountCents: number
     installmentAmountCents: number
     description?: string
     product: string
@@ -151,11 +152,18 @@ export const useTransactionsStore = defineStore('transactions', () => {
     const created: Transaction[] = []
     const isCredit = base.payment_method === 'credit'
 
+    const regularInstallmentsTotal = base.installmentAmountCents * base.totalInstallments
+    const roundingDiffCents = base.totalAmountCents - regularInstallmentsTotal
+
     for (let i = 1; i <= base.totalInstallments; i++) {
       const installmentDate = i === 1 ? base.date : addMonths(base.date, i - 1)
       // Crédito: todas as parcelas pendentes (acumula na fatura)
       // Débito: só 1ª parcela paga, demais pendentes
       const isPaid = isCredit ? false : (i === 1)
+      // Absorve diferença de arredondamento na última parcela para fechar o total.
+      const installmentAmountCents = i === base.totalInstallments
+        ? base.installmentAmountCents + roundingDiffCents
+        : base.installmentAmountCents
 
       const tx = await apiPost<Transaction>('/transactions', {
         id: uuid(),
@@ -163,7 +171,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
         date: installmentDate,
         type: base.type,
         payment_method: base.payment_method,
-        amount_cents: base.installmentAmountCents,
+        amount_cents: installmentAmountCents,
         description: base.description,
         paid: isPaid,
         installment: {
@@ -221,37 +229,66 @@ export const useTransactionsStore = defineStore('transactions', () => {
     await accountsStore.adjustBalance(tx.accountId, -tx.amount_cents, note)
   }
 
+  function addAccountDelta(map: Map<number, number>, accountId: number | undefined, delta: number) {
+    if (accountId == null) return
+    if (!Number.isFinite(delta) || delta === 0) return
+    map.set(accountId, (map.get(accountId) ?? 0) + delta)
+  }
+
+  function collectAppliedAccountDeltas(tx: Transaction) {
+    const deltas = new Map<number, number>()
+    if (!tx.paid) return deltas
+
+    // Impacto principal na conta da transacao.
+    addAccountDelta(deltas, tx.accountId, tx.amount_cents)
+
+    // Transferencia tambem impacta a conta destino com sinal inverso.
+    if (tx.type === 'transfer') {
+      addAccountDelta(deltas, tx.destinationAccountId, -tx.amount_cents)
+    }
+
+    return deltas
+  }
+
+  function snapshotTransaction(tx: Transaction): Transaction {
+    return {
+      ...tx,
+      installment: tx.installment ? { ...tx.installment } : tx.installment,
+    }
+  }
+
   async function updateTransaction(id: string, patch: Partial<Transaction>) {
     const old = transactions.value.find(t => t.id === id)
+    const oldSnapshot = old ? snapshotTransaction(old) : null
 
     const updated = await apiPatch<Transaction>(`/transactions/${id}`, patch)
     const idx = transactions.value.findIndex(t => t.id === id)
     if (idx !== -1) transactions.value[idx] = updated
 
     // Sem snapshot anterior em memoria, nao ha como calcular diferenca de saldo com seguranca.
-    if (!old) return updated
+    if (!oldSnapshot) return updated
 
     const accountsStore = useAccountsStore()
-    const oldApplied = old.paid ? old.amount_cents : 0
-    const newApplied = updated.paid ? updated.amount_cents : 0
 
-    if (old.accountId === updated.accountId) {
-      const delta = newApplied - oldApplied
-      if (delta !== 0) {
-        const label = updated.description || old.description || 'Transacao'
-        await accountsStore.adjustBalance(updated.accountId, delta, `Ajuste edicao - ${label}`)
-      }
-      return updated
+    // Reverte o impacto antigo e aplica o impacto novo por conta.
+    const oldDeltas = collectAppliedAccountDeltas(oldSnapshot)
+    const newDeltas = collectAppliedAccountDeltas(updated)
+    const netDeltas = new Map<number, number>()
+
+    for (const [accountId, delta] of oldDeltas) {
+      addAccountDelta(netDeltas, accountId, -delta)
+    }
+    for (const [accountId, delta] of newDeltas) {
+      addAccountDelta(netDeltas, accountId, delta)
     }
 
-    // Conta alterada: remove impacto da conta antiga e aplica na nova, se houver.
-    if (oldApplied !== 0) {
-      const oldLabel = old.description || 'Transacao'
-      await accountsStore.adjustBalance(old.accountId, -oldApplied, `Estorno edicao - ${oldLabel}`)
-    }
-    if (newApplied !== 0) {
-      const newLabel = updated.description || 'Transacao'
-      await accountsStore.adjustBalance(updated.accountId, newApplied, newLabel)
+    const label = updated.description
+      || oldSnapshot.description
+      || (updated.type === 'transfer' || oldSnapshot.type === 'transfer' ? 'Transferencia' : 'Transacao')
+
+    for (const [accountId, delta] of netDeltas) {
+      if (delta === 0) continue
+      await accountsStore.adjustBalance(accountId, delta, `Ajuste edicao - ${label}`)
     }
 
     return updated
@@ -273,21 +310,54 @@ export const useTransactionsStore = defineStore('transactions', () => {
       throw new Error('Transacoes de credito pagas nao podem ser excluidas.')
     }
 
+    const txSnapshot = tx ? snapshotTransaction(tx) : null
+
     await apiDelete(`/transactions/${id}`)
     transactions.value = transactions.value.filter(t => t.id !== id)
+
+    if (!txSnapshot) return
+
+    const accountsStore = useAccountsStore()
+    const appliedDeltas = collectAppliedAccountDeltas(txSnapshot)
+    const label = txSnapshot.description || (txSnapshot.type === 'transfer' ? 'Transferencia' : 'Transacao')
+
+    for (const [accountId, delta] of appliedDeltas) {
+      if (delta === 0) continue
+      await accountsStore.adjustBalance(accountId, -delta, `Estorno exclusao - ${label}`)
+    }
   }
 
   /** Exclui todas as parcelas de um grupo (mesmo parentId) */
-  async function deleteInstallmentGroup(parentId: string) {
+  async function deleteInstallmentGroup(parentId: string, onProgress?: (current: number, total: number) => void) {
     if (hasPaidCreditInInstallmentGroup(parentId)) {
       throw new Error('O grupo possui parcela de credito ja paga e nao pode ser excluido.')
     }
 
     const parcelas = transactions.value.filter(t => t.installment?.parentId === parentId)
-    for (const p of parcelas) {
+    const parcelasSnapshots = parcelas.map(snapshotTransaction)
+
+    for (const [index, p] of parcelas.entries()) {
       await apiDelete(`/transactions/${p.id}`)
+      onProgress?.(index + 1, parcelas.length)
     }
     transactions.value = transactions.value.filter(t => t.installment?.parentId !== parentId)
+
+    if (!parcelasSnapshots.length) return
+
+    const accountsStore = useAccountsStore()
+    const reversalDeltas = new Map<number, number>()
+    for (const parcela of parcelasSnapshots) {
+      const applied = collectAppliedAccountDeltas(parcela)
+      for (const [accountId, delta] of applied) {
+        addAccountDelta(reversalDeltas, accountId, -delta)
+      }
+    }
+
+    const groupLabel = parcelasSnapshots[0]?.installment?.product || 'Parcelas'
+    for (const [accountId, delta] of reversalDeltas) {
+      if (delta === 0) continue
+      await accountsStore.adjustBalance(accountId, delta, `Estorno exclusao grupo - ${groupLabel}`)
+    }
   }
 
   return {

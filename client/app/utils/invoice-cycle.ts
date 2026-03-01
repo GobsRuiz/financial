@@ -10,6 +10,11 @@ function dateFromParts(year: number, monthIndexOneBased: number, day: number): s
   return `${year}-${mm}-${dd}`
 }
 
+function monthFromParts(year: number, monthIndexOneBased: number): string {
+  const mm = String(monthIndexOneBased).padStart(2, '0')
+  return `${year}-${mm}`
+}
+
 function shiftYearMonth(year: number, monthIndexOneBased: number, monthDelta: number) {
   const moved = new Date(year, monthIndexOneBased - 1 + monthDelta, 1)
   return {
@@ -64,4 +69,30 @@ export function computeCreditInvoiceDueDate(
     : shiftYearMonth(closingRef.year, closingRef.monthIndexOneBased, 1)
 
   return dateFromParts(dueRef.year, dueRef.monthIndexOneBased, dueDay)
+}
+
+/**
+ * Calcula o mes do ciclo/fechamento da fatura para uma compra no credito (YYYY-MM).
+ * - compra no dia de fechamento ou depois -> ciclo do mes seguinte
+ * - compra antes do fechamento -> ciclo do mes atual
+ */
+export function computeCreditInvoiceCycleMonth(
+  purchaseDateISO: string,
+  closingDay?: number,
+): string | null {
+  const parsed = parseISODateLoose(purchaseDateISO)
+  if (!parsed) return null
+
+  if (!closingDay) {
+    return monthFromParts(parsed.year, parsed.monthIndexOneBased)
+  }
+
+  const effectiveClosingDay = clampDay(parsed.year, parsed.monthIndexOneBased, closingDay)
+  const closesNextMonth = parsed.day >= effectiveClosingDay
+
+  const closingRef = closesNextMonth
+    ? shiftYearMonth(parsed.year, parsed.monthIndexOneBased, 1)
+    : { year: parsed.year, monthIndexOneBased: parsed.monthIndexOneBased }
+
+  return monthFromParts(closingRef.year, closingRef.monthIndexOneBased)
 }

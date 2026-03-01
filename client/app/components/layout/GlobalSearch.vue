@@ -31,7 +31,7 @@ const hasQuery = computed(() => query.value.trim().length > 0)
 const displayGroups = computed(() => {
   let index = 0
   const groups = [
-    { key: 'transactions', label: 'Transacoes', items: groupedResults.value.transactions },
+    { key: 'transactions', label: 'Transações', items: groupedResults.value.transactions },
     { key: 'recurrents', label: 'Recorrentes', items: groupedResults.value.recurrents },
     { key: 'investments', label: 'Investimentos', items: groupedResults.value.investments },
   ]
@@ -173,7 +173,7 @@ if (import.meta.client) {
       <Search class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         v-model="query"
-        placeholder="Buscar transacoes, recorrentes e investimentos..."
+        placeholder="Buscar transações, recorrentes e investimentos..."
         class="h-9 pl-9 pr-20"
         @focus="handleInputFocus"
         @keydown="handleInputKeydown"
@@ -204,7 +204,7 @@ if (import.meta.client) {
           v-else-if="!hasQuery"
           class="px-3 py-3 text-sm text-muted-foreground"
         >
-          Digite para buscar por descricao, nome ou codigo do ativo.
+          Digite para buscar por descrição, nome ou código do ativo.
         </p>
 
         <p

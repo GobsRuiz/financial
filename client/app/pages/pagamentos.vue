@@ -143,7 +143,7 @@ onMounted(async () => {
     <template v-else-if="hasFatalLoadError">
       <Card class="border-red-500/30 bg-red-500/5">
         <CardContent class="space-y-3 pt-6">
-          <p class="font-semibold text-red-500">Nao foi possivel carregar pagamentos</p>
+          <p class="font-semibold text-red-500">Não foi possível carregar pagamentos</p>
           <p class="text-sm text-muted-foreground">
             {{ loadErrorMessage || 'Verifique o servidor/API e tente novamente.' }}
           </p>

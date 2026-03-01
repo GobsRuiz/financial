@@ -18,7 +18,7 @@ const menuItems = [
   { label: 'Pagamentos', icon: Clock, to: '/pagamentos' },
   { label: 'Contas', icon: Landmark, to: '/contas' },
   { label: 'Histórico', icon: Wallet, to: '/historico' },
-  { label: 'Settings', icon: Settings, to: '/settings' },
+  { label: 'Configurações', icon: Settings, to: '/settings' },
 ]
 
 function isActive(to: string) {

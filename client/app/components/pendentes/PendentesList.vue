@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import dayjs from 'dayjs'
 import {
   Check,
   Filter,
@@ -46,6 +47,30 @@ const payingId = ref<string | null>(null)
 const recentlyPaidIds = ref<Set<string>>(new Set())
 const paidHighlightTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const isProcessing = computed(() => payingId.value !== null)
+const payFaturaProgress = ref(0)
+const payFaturaTotal = ref(0)
+const showPayFaturaModal = ref(false)
+
+const payFaturaPercent = computed(() => {
+  if (!payFaturaTotal.value) return 0
+  return Math.round((payFaturaProgress.value / payFaturaTotal.value) * 100)
+})
+
+const payFaturaCurrentStep = computed(() => {
+  if (!payFaturaTotal.value) return 0
+  if (payFaturaProgress.value >= payFaturaTotal.value) return payFaturaTotal.value
+  return payFaturaProgress.value + 1
+})
+
+const payFaturaCurrentLabel = computed(() => {
+  if (!payFaturaTotal.value) return ''
+  return `Pagando compra ${payFaturaCurrentStep.value} de ${payFaturaTotal.value}...`
+})
+
+const payFaturaStepMeta = computed(() => {
+  if (!payFaturaTotal.value) return ''
+  return `Etapa ${payFaturaCurrentStep.value} de ${payFaturaTotal.value}`
+})
 
 const actionButtonBaseClass = 'w-[132px] justify-center gap-1.5'
 const paidActionButtonClass = `${actionButtonBaseClass} text-green-500 border-green-500/30 hover:bg-transparent disabled:opacity-100 disabled:cursor-default`
@@ -59,7 +84,7 @@ const modeOptions: { label: string, value: ViewMode }[] = [
 const tipoOptions = [
   { label: 'Todos', value: 'todos' },
   { label: 'Faturas', value: 'fatura' },
-  { label: 'Transacoes', value: 'transacao' },
+  { label: 'Transações', value: 'transacao' },
   { label: 'Recorrentes', value: 'recorrente' },
 ]
 
@@ -220,6 +245,10 @@ function getTxLabel(tx: Transaction): string {
   return tx.description || 'Transacao'
 }
 
+function formatDisplayDate(date: string) {
+  return dayjs(date).isValid() ? dayjs(date).format('DD/MM/YYYY') : date
+}
+
 function getFaturaVisibleTransactions(fatura: FaturaGroup) {
   if (viewMode.value === 'open') return fatura.transactions.filter(tx => !tx.paid)
   if (viewMode.value === 'paid') return fatura.transactions.filter(tx => tx.paid)
@@ -235,7 +264,7 @@ function getFaturaActionLabel(fatura: FaturaGroup) {
 
 function getRecurrentLabel(rec: Recurrent, loading: boolean) {
   if (rec.kind === 'income') return loading ? 'Recebendo...' : 'Receber'
-  if ((rec.payment_method ?? 'debit') === 'credit') return loading ? 'Lancando...' : 'Lancar'
+  if ((rec.payment_method ?? 'debit') === 'credit') return loading ? 'Lançando...' : 'Lançar'
   return loading ? 'Pagando...' : 'Pagar'
 }
 
@@ -276,25 +305,52 @@ function clearFilters() {
   filterTipo.value = 'todos'
 }
 
+function openPayFaturaModal(total: number) {
+  payFaturaTotal.value = total
+  payFaturaProgress.value = 0
+  showPayFaturaModal.value = true
+}
+
+function closePayFaturaModal() {
+  showPayFaturaModal.value = false
+  payFaturaProgress.value = 0
+  payFaturaTotal.value = 0
+}
+
+onBeforeRouteLeave(() => {
+  if (!showPayFaturaModal.value) return true
+
+  appToast.warning({
+    title: 'Operação em andamento',
+    description: 'Aguarde a conclusão. A navegação e os cliques estão temporariamente bloqueados.',
+  })
+  return false
+})
+
 async function payFatura(fatura: FaturaGroup) {
   if (isProcessing.value) return
   const openTransactions = fatura.transactions.filter(tx => !tx.paid)
   if (!openTransactions.length) return
+
+  openPayFaturaModal(openTransactions.length)
   payingId.value = `fatura-${fatura.accountId}`
   try {
-    for (const tx of openTransactions) {
+    for (const [index, tx] of openTransactions.entries()) {
       await transactionsStore.markPaid(tx.id)
+      payFaturaProgress.value = index + 1
       markRecentlyPaid(tx.id)
     }
+    closePayFaturaModal()
     markRecentlyPaid(faturaVisualId(fatura.accountId))
     appToast.success({
       title: 'Fatura paga',
       description: `${openTransactions.length} compra(s) marcada(s) como paga(s).`,
     })
   } catch (e: any) {
+    closePayFaturaModal()
     appToast.error({
       title: 'Erro ao pagar fatura',
-      description: e?.message || 'Nao foi possivel concluir o pagamento da fatura.',
+      description: e?.message || 'Não foi possível concluir o pagamento da fatura.',
     })
   } finally {
     payingId.value = null
@@ -314,7 +370,7 @@ async function payTransaction(tx: Transaction) {
   } catch (e: any) {
     appToast.error({
       title: 'Erro ao pagar transacao',
-      description: e?.message || 'Nao foi possivel concluir o pagamento.',
+      description: e?.message || 'Não foi possível concluir o pagamento.',
     })
   } finally {
     payingId.value = null
@@ -336,8 +392,8 @@ async function payRecurrent(rec: Recurrent) {
     })
   } catch (e: any) {
     appToast.error({
-      title: 'Erro ao lancar recorrente',
-      description: e?.message || 'Nao foi possivel lancar a recorrente.',
+      title: 'Erro ao lançar recorrente',
+      description: e?.message || 'Não foi possível lançar a recorrente.',
     })
   } finally {
     payingId.value = null
@@ -370,7 +426,7 @@ async function payRecurrent(rec: Recurrent) {
         <CardContent class="pt-6">
           <p class="text-sm text-muted-foreground">Itens no Modo</p>
           <p class="text-2xl font-bold">{{ summaryCount }}</p>
-          <p class="text-xs text-muted-foreground mt-1">faturas, transacoes e recorrentes</p>
+          <p class="text-xs text-muted-foreground mt-1">faturas, transações e recorrentes</p>
         </CardContent>
       </Card>
     </div>
@@ -422,7 +478,7 @@ async function payRecurrent(rec: Recurrent) {
         <Separator />
 
         <div v-if="showFaturasSection && faturasFiltered.length" class="space-y-2">
-          <div class="flex items-center gap-2 text-sm font-medium text-muted-foreground"><CreditCard class="h-4 w-4" />Faturas do Cartao</div>
+          <div class="flex items-center gap-2 text-sm font-medium text-muted-foreground"><CreditCard class="h-4 w-4" />Faturas do Cartão</div>
           <Table class="table-fixed">
             <TableHeader>
               <TableRow>
@@ -433,7 +489,7 @@ async function payRecurrent(rec: Recurrent) {
                 <TableHead class="w-[14%] text-right">Total</TableHead>
                 <TableHead class="w-[14%] text-right">Pago</TableHead>
                 <TableHead class="w-[14%] text-right">Aberto</TableHead>
-                <TableHead class="w-[160px] text-right">Acao</TableHead>
+                <TableHead class="w-[160px] text-right">Ação</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -499,7 +555,7 @@ async function payRecurrent(rec: Recurrent) {
                           >
                             {{ getTxLabel(tx) }}
                           </span>
-                          <span class="text-muted-foreground text-xs">{{ tx.date }}</span>
+                          <span class="text-muted-foreground text-xs">{{ formatDisplayDate(tx.date) }}</span>
                           <Badge
                             v-if="viewMode === 'all' && tx.paid"
                             variant="outline"
@@ -521,15 +577,15 @@ async function payRecurrent(rec: Recurrent) {
         <template v-if="showTransacoesSection && transacoesDebito.length">
           <Separator v-if="showFaturasSection && faturasFiltered.length" />
           <div class="space-y-2">
-            <div class="flex items-center gap-2 text-sm font-medium text-muted-foreground"><Receipt class="h-4 w-4" />Transacoes Avulsas</div>
+            <div class="flex items-center gap-2 text-sm font-medium text-muted-foreground"><Receipt class="h-4 w-4" />Transações Avulsas</div>
             <Table class="table-fixed">
               <TableHeader>
                 <TableRow>
-                  <TableHead class="w-[34%]">Descricao</TableHead>
+                  <TableHead class="w-[34%]">Descrição</TableHead>
                   <TableHead class="w-[16%]">Conta</TableHead>
                   <TableHead class="w-[14%]">Data</TableHead>
                   <TableHead class="w-[14%] text-right">Valor</TableHead>
-                  <TableHead class="w-[160px] text-right">Acao</TableHead>
+                  <TableHead class="w-[160px] text-right">Ação</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -560,7 +616,7 @@ async function payRecurrent(rec: Recurrent) {
                     </div>
                   </TableCell>
                   <TableCell>{{ getAccountLabel(tx.accountId) }}</TableCell>
-                  <TableCell>{{ tx.date }}</TableCell>
+                  <TableCell>{{ formatDisplayDate(tx.date) }}</TableCell>
                   <TableCell class="text-right text-red-500">{{ formatCentsToBRL(Math.abs(tx.amount_cents)) }}</TableCell>
                   <TableCell class="text-right">
                     <Button
@@ -585,15 +641,15 @@ async function payRecurrent(rec: Recurrent) {
         <template v-if="showRecorrentesSection && recurringPendingFiltered.length">
           <Separator v-if="(showFaturasSection && faturasFiltered.length) || (showTransacoesSection && transacoesDebito.length)" />
           <div class="space-y-2">
-            <div class="flex items-center gap-2 text-sm font-medium text-muted-foreground"><Repeat class="h-4 w-4" />Recorrentes a Lancar</div>
+            <div class="flex items-center gap-2 text-sm font-medium text-muted-foreground"><Repeat class="h-4 w-4" />Recorrentes a Lançar</div>
             <Table class="table-fixed">
               <TableHeader>
                 <TableRow>
-                  <TableHead class="w-[34%]">Descricao</TableHead>
+                  <TableHead class="w-[34%]">Descrição</TableHead>
                   <TableHead class="w-[16%]">Conta</TableHead>
                   <TableHead class="w-[14%]">Dia</TableHead>
                   <TableHead class="w-[14%] text-right">Valor</TableHead>
-                  <TableHead class="w-[160px] text-right">Acao</TableHead>
+                  <TableHead class="w-[160px] text-right">Ação</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -620,10 +676,33 @@ async function payRecurrent(rec: Recurrent) {
     </Card>
     </div>
     <div
-      v-if="isProcessing"
+      v-if="isProcessing && !showPayFaturaModal"
       class="absolute inset-0 z-20 grid place-items-center rounded-lg bg-background/45 backdrop-blur-[1px]"
     >
       <Spinner class="h-5 w-5" />
+    </div>
+
+    <div
+      v-if="showPayFaturaModal"
+      class="fixed inset-0 z-[200] bg-background/80 backdrop-blur-[1px] cursor-wait"
+    >
+      <div class="absolute inset-0" />
+      <div class="absolute inset-x-0 top-20 px-4">
+        <Card class="mx-auto max-w-2xl border-primary/30 shadow-lg">
+          <CardContent class="pt-6 space-y-3">
+            <div class="flex items-center gap-2">
+              <Spinner class="h-4 w-4 text-primary" />
+              <p class="font-medium">Operação em andamento</p>
+            </div>
+            <p class="text-sm text-muted-foreground">
+              Aguarde a conclusão. A navegação e os cliques estão temporariamente bloqueados.
+            </p>
+            <Progress :model-value="payFaturaPercent" class="h-2" />
+            <p class="text-sm font-medium">{{ payFaturaCurrentLabel }}</p>
+            <p class="text-xs text-muted-foreground">{{ payFaturaStepMeta }}</p>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   </div>
 </template>

@@ -133,6 +133,32 @@ export const useInvestmentEventsStore = defineStore('investment-events', () => {
     })
   }
 
+  async function recomputeAllPositions() {
+    const positionsStore = useInvestmentPositionsStore()
+    const positionIds = positionsStore.positions.map(position => position.id)
+
+    if (!positionIds.length) {
+      return { total: 0, succeeded: 0, failed: 0 }
+    }
+
+    const results = await Promise.allSettled(
+      positionIds.map(positionId => recomputePosition(positionId)),
+    )
+
+    let failed = 0
+    results.forEach((result, index) => {
+      if (result.status !== 'rejected') return
+      failed += 1
+      console.error(`Erro ao recalcular posicao ${positionIds[index]}:`, result.reason)
+    })
+
+    return {
+      total: positionIds.length,
+      succeeded: positionIds.length - failed,
+      failed,
+    }
+  }
+
   /**
    * Ajusta saldo da conta vinculada ao evento.
    * - buy/contribution: debita (saiu dinheiro da conta)
@@ -172,5 +198,6 @@ export const useInvestmentEventsStore = defineStore('investment-events', () => {
     deleteEvent,
     listByPosition,
     recomputePosition,
+    recomputeAllPositions,
   }
 })

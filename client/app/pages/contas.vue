@@ -23,6 +23,34 @@ const deleting = ref(false)
 const deleteTarget = ref<Account | null>(null)
 const accountFormProcessing = ref(false)
 const isProcessing = computed(() => deleting.value || accountFormProcessing.value)
+const showDeleteAccountModal = ref(false)
+
+const DELETE_ACCOUNT_PROGRESS_STEPS = [
+  'Excluindo eventos de investimento...',
+  'Excluindo posicoes...',
+  'Excluindo transacoes...',
+  'Excluindo recorrentes...',
+  'Excluindo historico...',
+  'Removendo conta...',
+  'Concluido!',
+]
+
+const deleteAccountProgressStep = ref(0)
+const deleteAccountProgressLabel = ref(DELETE_ACCOUNT_PROGRESS_STEPS[0] ?? '')
+
+const deleteAccountProgressPercent = computed(() => {
+  const total = DELETE_ACCOUNT_PROGRESS_STEPS.length
+  if (!total) return 0
+  const current = Math.min(deleteAccountProgressStep.value + 1, total)
+  return Math.round((current / total) * 100)
+})
+
+const deleteAccountProgressMeta = computed(() => {
+  const total = DELETE_ACCOUNT_PROGRESS_STEPS.length
+  if (!total) return ''
+  const current = Math.min(deleteAccountProgressStep.value + 1, total)
+  return `Etapa ${current} de ${total}`
+})
 
 const sourceLoaders = [
   { label: 'contas', load: () => accountsStore.loadAccounts() },
@@ -148,21 +176,21 @@ const deleteRecCount = computed(() =>
 )
 
 const deleteDescription = computed(() => {
-  if (!deleteTarget.value) return 'Esta acao e irreversivel.'
+  if (!deleteTarget.value) return 'Esta ação é irreversível.'
 
   const warnings: string[] = []
   if (deleteTxCount.value > 0) {
-    warnings.push(`Esta conta possui ${deleteTxCount.value} transacao(oes) vinculada(s).`)
+    warnings.push(`Esta conta possui ${deleteTxCount.value} transação(ões) vinculada(s).`)
   }
   if (deleteRecCount.value > 0) {
     warnings.push(`Tambem possui ${deleteRecCount.value} recorrente(s) vinculada(s).`)
   }
 
   if (!warnings.length) {
-    return 'Deseja excluir esta conta? Esta acao e irreversivel.'
+    return 'Deseja excluir esta conta? Esta ação é irreversível.'
   }
 
-  return `${warnings.join(' ')} Deseja excluir tudo? Esta acao e irreversivel.`
+  return `${warnings.join(' ')} Deseja excluir tudo? Esta ação é irreversível.`
 })
 
 function requestDelete(acc: Account) {
@@ -177,6 +205,36 @@ function cancelDeleteAccount() {
   deleteTarget.value = null
 }
 
+function startDeleteAccountProgress() {
+  deleteAccountProgressStep.value = 0
+  deleteAccountProgressLabel.value = DELETE_ACCOUNT_PROGRESS_STEPS[0] ?? ''
+  showDeleteAccountModal.value = true
+}
+
+function updateDeleteAccountProgress(step: string) {
+  const stepIndex = DELETE_ACCOUNT_PROGRESS_STEPS.indexOf(step)
+  if (stepIndex >= 0) {
+    deleteAccountProgressStep.value = stepIndex
+  }
+  deleteAccountProgressLabel.value = step
+}
+
+function resetDeleteAccountProgress() {
+  showDeleteAccountModal.value = false
+  deleteAccountProgressStep.value = 0
+  deleteAccountProgressLabel.value = DELETE_ACCOUNT_PROGRESS_STEPS[0] ?? ''
+}
+
+onBeforeRouteLeave(() => {
+  if (!showDeleteAccountModal.value) return true
+
+  appToast.warning({
+    title: 'Operação em andamento',
+    description: 'Aguarde a conclusão. A navegação e os cliques estão temporariamente bloqueados.',
+  })
+  return false
+})
+
 async function confirmDeleteAccount() {
   if (!deleteTarget.value || deleting.value) return
   deleting.value = true
@@ -184,7 +242,10 @@ async function confirmDeleteAccount() {
   const accountId = deleteTarget.value.id
 
   try {
-    const deleted = await accountsStore.deleteAccount(accountId)
+    deleteConfirmOpen.value = false
+    startDeleteAccountProgress()
+
+    const deleted = await accountsStore.deleteAccount(accountId, updateDeleteAccountProgress)
     transactionsStore.transactions = transactionsStore.transactions.filter(tx =>
       tx.accountId !== accountId && tx.destinationAccountId !== accountId,
     )
@@ -192,14 +253,15 @@ async function confirmDeleteAccount() {
 
     appToast.success({
       title: 'Conta excluida',
-      description: `${deleted.transactionsDeleted} transacao(oes), ${deleted.recurrentsDeleted} recorrente(s) e ${deleted.historyDeleted} historico(s) removidos.`,
+      description: `${deleted.transactionsDeleted} transação(ões), ${deleted.recurrentsDeleted} recorrente(s), ${deleted.investmentPositionsDeleted} posição(ões), ${deleted.investmentEventsDeleted} evento(s) e ${deleted.historyDeleted} histórico(s) removidos.`,
     })
   } catch (e: any) {
     appToast.error({
       title: 'Erro ao excluir conta',
-      description: e?.message || 'Nao foi possivel excluir a conta.',
+      description: e?.message || 'Não foi possível excluir a conta.',
     })
   } finally {
+    resetDeleteAccountProgress()
     deleting.value = false
     deleteConfirmOpen.value = false
     deleteTarget.value = null
@@ -251,7 +313,7 @@ async function confirmDeleteAccount() {
     <template v-else-if="hasFatalLoadError">
       <Card class="border-red-500/30 bg-red-500/5">
         <CardContent class="space-y-3 pt-6">
-          <p class="font-semibold text-red-500">Nao foi possivel carregar contas</p>
+          <p class="font-semibold text-red-500">Não foi possível carregar contas</p>
           <p class="text-sm text-muted-foreground">
             {{ loadErrorMessage || 'Verifique o servidor/API e tente novamente.' }}
           </p>
@@ -357,10 +419,33 @@ async function confirmDeleteAccount() {
       @cancel="cancelDeleteAccount"
     />
     <div
-      v-if="isProcessing"
+      v-if="isProcessing && !showDeleteAccountModal"
       class="absolute inset-0 z-20 grid place-items-center rounded-lg bg-background/45 backdrop-blur-[1px]"
     >
       <Spinner class="h-5 w-5" />
+    </div>
+
+    <div
+      v-if="showDeleteAccountModal"
+      class="fixed inset-0 z-[200] bg-background/80 backdrop-blur-[1px] cursor-wait"
+    >
+      <div class="absolute inset-0" />
+      <div class="absolute inset-x-0 top-20 px-4">
+        <Card class="mx-auto max-w-2xl border-primary/30 shadow-lg">
+          <CardContent class="pt-6 space-y-3">
+            <div class="flex items-center gap-2">
+              <Spinner class="h-4 w-4 text-primary" />
+              <p class="font-medium">Operação em andamento</p>
+            </div>
+            <p class="text-sm text-muted-foreground">
+              Aguarde a conclusão. A navegação e os cliques estão temporariamente bloqueados.
+            </p>
+            <Progress :model-value="deleteAccountProgressPercent" class="h-2" />
+            <p class="text-sm font-medium">{{ deleteAccountProgressLabel }}</p>
+            <p class="text-xs text-muted-foreground">{{ deleteAccountProgressMeta }}</p>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   </div>
 </template>

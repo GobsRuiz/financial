@@ -124,8 +124,12 @@ async function loadPageData() {
     if (positionsLoaded && eventsLoaded) {
       try {
         // Recalcula posicoes para manter os totais consistentes com os eventos.
-        for (const position of positionsStore.positions) {
-          await eventsStore.recomputePosition(position.id)
+        const recomputeResult = await eventsStore.recomputeAllPositions()
+        if (recomputeResult.failed > 0) {
+          failed.add('recalculo de investimentos')
+          console.error(
+            `Falha ao recalcular ${recomputeResult.failed} de ${recomputeResult.total} posicoes`,
+          )
         }
       } catch (error) {
         failed.add('recalculo de investimentos')
@@ -203,6 +207,27 @@ const fixedPositions = computed(() =>
 const selectedPosition = computed(() =>
   positionsStore.positions.find(p => p.id === eventForm.positionId),
 )
+
+function getEffectiveAvailableQuantityForSell(position: InvestmentPosition) {
+  let available = position.quantity_total ?? 0
+
+  if (editingEvent.value && editingEvent.value.positionId === position.id) {
+    const originalQty = editingEvent.value.quantity ?? 0
+    if (editingEvent.value.event_type === 'sell') {
+      available += originalQty
+    } else if (editingEvent.value.event_type === 'buy') {
+      available -= originalQty
+    }
+  }
+
+  return Math.max(0, available)
+}
+
+const availableSellQuantity = computed(() => {
+  const position = selectedPosition.value
+  if (!position || position.bucket !== 'variable') return 0
+  return getEffectiveAvailableQuantityForSell(position)
+})
 
 const eventTypeOptions = computed(() =>
   {
@@ -444,6 +469,10 @@ function formatCentsToInput(cents?: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(cents / 100)
+}
+
+function formatQuantityDisplay(quantity: number) {
+  return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 8 }).format(quantity)
 }
 
 function positionHasEvents(positionId: string) {
@@ -760,7 +789,7 @@ async function confirmDelete() {
   } catch (e: any) {
     appToast.error({
       title: 'Erro ao excluir',
-      description: e.message || 'Nao foi possivel excluir',
+      description: e.message || 'Não foi possível excluir',
     })
   } finally {
     deleting.value = false
@@ -789,7 +818,7 @@ async function submitPosition() {
   try {
     if (!positionForm.accountId) throw new Error('Selecione uma conta')
     if (requiresAssetCode.value && !positionForm.asset_code.trim()) {
-      throw new Error('Informe o codigo')
+      throw new Error('Informe o código')
     }
 
     const normalizedCode = requiresAssetCode.value
@@ -798,10 +827,10 @@ async function submitPosition() {
 
     if (editingPosition.value && editingPositionHasEvents.value) {
       if (editingPosition.value.accountId !== positionForm.accountId) {
-        throw new Error('Nao e possivel alterar a conta de um ativo com lancamentos')
+        throw new Error('Não é possível alterar a conta de um ativo com lançamentos')
       }
       if (editingPosition.value.bucket !== positionForm.bucket) {
-        throw new Error('Nao e possivel alterar o grupo de um ativo com lancamentos')
+        throw new Error('Não é possível alterar o grupo de um ativo com lançamentos')
       }
     }
 
@@ -867,15 +896,21 @@ async function submitEvent() {
     if (!eventForm.amount) throw new Error('Informe o valor total')
 
     const position = selectedPosition.value
-    if (!position) throw new Error('Ativo invalido')
+    if (!position) throw new Error('Ativo inválido')
 
     if (position.investment_type === 'caixinha' && eventForm.event_type === 'maturity') {
-      throw new Error('Evento vencimento nao esta disponivel para caixinha')
+      throw new Error('Evento vencimento não está disponível para caixinha')
     }
 
     if (position.bucket === 'variable' && (eventForm.event_type === 'buy' || eventForm.event_type === 'sell')) {
       const qty = Number(eventForm.quantity.replace(',', '.'))
       if (!Number.isFinite(qty) || qty <= 0) throw new Error('Informe a quantidade')
+      if (eventForm.event_type === 'sell') {
+        const availableQty = getEffectiveAvailableQuantityForSell(position)
+        if (qty > availableQty) {
+          throw new Error(`Voce possui apenas ${formatQuantityDisplay(availableQty)} cotas`)
+        }
+      }
     }
 
     const payload = {
@@ -943,7 +978,7 @@ async function submitEvent() {
     <template v-else-if="hasFatalLoadError">
       <Card class="border-red-500/30 bg-red-500/5">
         <CardContent class="space-y-3 pt-6">
-          <p class="font-semibold text-red-500">Nao foi possivel carregar investimentos</p>
+          <p class="font-semibold text-red-500">Não foi possível carregar investimentos</p>
           <p class="text-sm text-muted-foreground">
             {{ loadErrorMessage || 'Verifique o servidor/API e tente novamente.' }}
           </p>
@@ -969,7 +1004,7 @@ async function submitEvent() {
         </CardContent>
       </Card>
 
-      <Tabs v-model="activeBucket">
+      <Tabs v-model="activeBucket" className="mb-4">
         <TabsList>
           <TabsTrigger value="variable">Renda Variavel</TabsTrigger>
           <TabsTrigger value="fixed">Renda Fixa</TabsTrigger>
@@ -1194,7 +1229,7 @@ async function submitEvent() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Lancamentos</CardTitle>
+          <CardTitle>Lançamentos</CardTitle>
         </CardHeader>
         <CardContent>
           <div class="mb-3 flex items-center justify-end gap-2">
@@ -1300,6 +1335,7 @@ async function submitEvent() {
     </template>
 
     </div>
+
     <div
       v-if="isProcessing"
       class="absolute inset-0 z-20 grid place-items-center rounded-lg bg-background/45 backdrop-blur-[1px]"
@@ -1457,6 +1493,12 @@ async function submitEvent() {
               <div class="space-y-2">
                 <Label>Quantidade *</Label>
                 <Input v-model="eventForm.quantity" placeholder="Ex: 10" />
+                <p
+                  v-if="eventForm.event_type === 'sell'"
+                  class="text-xs text-muted-foreground"
+                >
+                  Disponivel: {{ formatQuantityDisplay(availableSellQuantity) }} cotas
+                </p>
               </div>
               <div class="space-y-2">
                 <Label>Preco unitario</Label>
@@ -1475,7 +1517,7 @@ async function submitEvent() {
             </div>
 
             <div class="col-span-2 space-y-2">
-              <Label>Observacao</Label>
+              <Label>Observação</Label>
               <Input v-model="eventForm.note" placeholder="Opcional" />
             </div>
           </template>
@@ -1697,7 +1739,7 @@ async function submitEvent() {
             </div>
           </div>
           <div class="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
-            <p class="text-[11px] uppercase tracking-wide text-muted-foreground">Observacao</p>
+            <p class="text-[11px] uppercase tracking-wide text-muted-foreground">Observação</p>
             <p class="mt-1 font-medium">{{ viewingEvent.note || '—' }}</p>
           </div>
         </div>
@@ -1707,7 +1749,7 @@ async function submitEvent() {
     <ConfirmDialog
       :open="confirmDeleteOpen"
       title="Excluir item?"
-      :description="`Deseja excluir '${deleteTarget?.label}'? Esta acao nao pode ser desfeita.`"
+      :description="`Deseja excluir '${deleteTarget?.label}'? Esta ação não pode ser desfeita.`"
       confirm-label="Sim, excluir"
       cancel-label="Cancelar"
       :loading="deleting"

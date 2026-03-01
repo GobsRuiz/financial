@@ -4,261 +4,329 @@
       "bank": "inter",
       "label": "Inter Principal",
       "type": "bank",
-      "balance_cents": 157173,
-      "card_closing_day": 24,
-      "card_due_day": 26,
+      "balance_cents": 4950000,
+      "card_closing_day": 25,
+      "card_due_day": 31,
       "id": 1
     },
     {
       "bank": "nubank",
       "label": "Nubank Principal",
       "type": "bank",
-      "balance_cents": 55005,
+      "balance_cents": 24889,
+      "card_closing_day": 28,
+      "card_due_day": 3,
       "id": 2
+    },
+    {
+      "bank": "master",
+      "label": "Master Principal",
+      "type": "bank",
+      "balance_cents": 1000000,
+      "card_closing_day": 27,
+      "card_due_day": 4,
+      "id": 3
     }
   ],
   "transactions": [
     {
+      "id": "e1998ac7-b877-4895-8d0a-3caf4ea7f7e3",
       "accountId": 1,
-      "date": "2026-02-25",
+      "date": "2026-02-27",
       "type": "expense",
       "payment_method": "credit",
-      "amount_cents": -55000,
+      "amount_cents": -62500,
+      "paid": false,
+      "installment": {
+        "parentId": "c82a72df-1a62-45dc-bad6-10f615ffd0ed",
+        "total": 12,
+        "index": 1,
+        "product": "Geladeira"
+      },
+      "createdAt": "2026-02-27"
+    },
+    {
+      "id": "e95aba71-7d7c-4be9-9bb6-5c32ff37a5e5",
+      "accountId": 1,
+      "date": "2026-03-27",
+      "type": "expense",
+      "payment_method": "credit",
+      "amount_cents": -62500,
+      "paid": false,
+      "installment": {
+        "parentId": "c82a72df-1a62-45dc-bad6-10f615ffd0ed",
+        "total": 12,
+        "index": 2,
+        "product": "Geladeira"
+      },
+      "createdAt": "2026-02-27"
+    },
+    {
+      "id": "4347a7ba-f5c0-4d92-92fb-18e6eab9a649",
+      "accountId": 1,
+      "date": "2026-04-27",
+      "type": "expense",
+      "payment_method": "credit",
+      "amount_cents": -62500,
+      "paid": false,
+      "installment": {
+        "parentId": "c82a72df-1a62-45dc-bad6-10f615ffd0ed",
+        "total": 12,
+        "index": 3,
+        "product": "Geladeira"
+      },
+      "createdAt": "2026-02-27"
+    },
+    {
+      "id": "bdeff6d8-5319-4bc7-8ba7-918461926c82",
+      "accountId": 1,
+      "date": "2026-05-27",
+      "type": "expense",
+      "payment_method": "credit",
+      "amount_cents": -62500,
+      "paid": false,
+      "installment": {
+        "parentId": "c82a72df-1a62-45dc-bad6-10f615ffd0ed",
+        "total": 12,
+        "index": 4,
+        "product": "Geladeira"
+      },
+      "createdAt": "2026-02-27"
+    },
+    {
+      "id": "9565ffe2-7767-4a20-bbbd-bbaf16ad6559",
+      "accountId": 1,
+      "date": "2026-06-27",
+      "type": "expense",
+      "payment_method": "credit",
+      "amount_cents": -62500,
+      "paid": false,
+      "installment": {
+        "parentId": "c82a72df-1a62-45dc-bad6-10f615ffd0ed",
+        "total": 12,
+        "index": 5,
+        "product": "Geladeira"
+      },
+      "createdAt": "2026-02-27"
+    },
+    {
+      "id": "ef78e911-36ac-4cc3-8f98-f0a37c66aa2a",
+      "accountId": 1,
+      "date": "2026-07-27",
+      "type": "expense",
+      "payment_method": "credit",
+      "amount_cents": -62500,
+      "paid": false,
+      "installment": {
+        "parentId": "c82a72df-1a62-45dc-bad6-10f615ffd0ed",
+        "total": 12,
+        "index": 6,
+        "product": "Geladeira"
+      },
+      "createdAt": "2026-02-27"
+    },
+    {
+      "id": "77d2313d-a539-4d55-971e-948baa23697e",
+      "accountId": 1,
+      "date": "2026-08-27",
+      "type": "expense",
+      "payment_method": "credit",
+      "amount_cents": -62500,
+      "paid": false,
+      "installment": {
+        "parentId": "c82a72df-1a62-45dc-bad6-10f615ffd0ed",
+        "total": 12,
+        "index": 7,
+        "product": "Geladeira"
+      },
+      "createdAt": "2026-02-27"
+    },
+    {
+      "id": "4274765f-193f-4cc7-89cd-e44442f977d6",
+      "accountId": 1,
+      "date": "2026-09-27",
+      "type": "expense",
+      "payment_method": "credit",
+      "amount_cents": -62500,
+      "paid": false,
+      "installment": {
+        "parentId": "c82a72df-1a62-45dc-bad6-10f615ffd0ed",
+        "total": 12,
+        "index": 8,
+        "product": "Geladeira"
+      },
+      "createdAt": "2026-02-27"
+    },
+    {
+      "id": "c9641ee6-1c90-471f-bf2b-5909d70e57aa",
+      "accountId": 1,
+      "date": "2026-10-27",
+      "type": "expense",
+      "payment_method": "credit",
+      "amount_cents": -62500,
+      "paid": false,
+      "installment": {
+        "parentId": "c82a72df-1a62-45dc-bad6-10f615ffd0ed",
+        "total": 12,
+        "index": 9,
+        "product": "Geladeira"
+      },
+      "createdAt": "2026-02-27"
+    },
+    {
+      "id": "4bd69ce3-1146-4c61-a2c8-c7dd5ff7073d",
+      "accountId": 1,
+      "date": "2026-11-27",
+      "type": "expense",
+      "payment_method": "credit",
+      "amount_cents": -62500,
+      "paid": false,
+      "installment": {
+        "parentId": "c82a72df-1a62-45dc-bad6-10f615ffd0ed",
+        "total": 12,
+        "index": 10,
+        "product": "Geladeira"
+      },
+      "createdAt": "2026-02-27"
+    },
+    {
+      "id": "b56543eb-6010-452f-8ed0-9e6114e6e620",
+      "accountId": 1,
+      "date": "2026-12-27",
+      "type": "expense",
+      "payment_method": "credit",
+      "amount_cents": -62500,
+      "paid": false,
+      "installment": {
+        "parentId": "c82a72df-1a62-45dc-bad6-10f615ffd0ed",
+        "total": 12,
+        "index": 11,
+        "product": "Geladeira"
+      },
+      "createdAt": "2026-02-27"
+    },
+    {
+      "id": "abb7c8ef-5d75-4fa0-981d-ba4b71a98999",
+      "accountId": 1,
+      "date": "2027-01-27",
+      "type": "expense",
+      "payment_method": "credit",
+      "amount_cents": -62500,
+      "paid": false,
+      "installment": {
+        "parentId": "c82a72df-1a62-45dc-bad6-10f615ffd0ed",
+        "total": 12,
+        "index": 12,
+        "product": "Geladeira"
+      },
+      "createdAt": "2026-02-27"
+    },
+    {
+      "id": "5f485d38-9412-491d-a533-11ac74b8a895",
+      "accountId": 2,
+      "date": "2026-02-27",
+      "type": "expense",
+      "payment_method": "credit",
+      "amount_cents": -25111,
       "paid": true,
-      "installment": null,
-      "id": "6c45e599-f642-411c-8f2d-72129bb901fb",
-      "createdAt": "2026-02-25"
+      "installment": {
+        "parentId": "727494b8-def0-4cf5-807a-e9066b549a3e",
+        "total": 5,
+        "index": 1,
+        "product": "Fogão"
+      },
+      "createdAt": "2026-02-27"
+    },
+    {
+      "id": "b3d2a21c-24ed-45d2-9cc9-608b86248d40",
+      "accountId": 2,
+      "date": "2026-03-27",
+      "type": "expense",
+      "payment_method": "credit",
+      "amount_cents": -25111,
+      "paid": false,
+      "installment": {
+        "parentId": "727494b8-def0-4cf5-807a-e9066b549a3e",
+        "total": 5,
+        "index": 2,
+        "product": "Fogão"
+      },
+      "createdAt": "2026-02-27"
+    },
+    {
+      "id": "9cb27304-92db-4a07-8d5b-c85766f8372d",
+      "accountId": 2,
+      "date": "2026-04-27",
+      "type": "expense",
+      "payment_method": "credit",
+      "amount_cents": -25111,
+      "paid": false,
+      "installment": {
+        "parentId": "727494b8-def0-4cf5-807a-e9066b549a3e",
+        "total": 5,
+        "index": 3,
+        "product": "Fogão"
+      },
+      "createdAt": "2026-02-27"
+    },
+    {
+      "id": "fd4ae54a-95f5-4b0b-8053-f72aef269004",
+      "accountId": 2,
+      "date": "2026-05-27",
+      "type": "expense",
+      "payment_method": "credit",
+      "amount_cents": -25111,
+      "paid": false,
+      "installment": {
+        "parentId": "727494b8-def0-4cf5-807a-e9066b549a3e",
+        "total": 5,
+        "index": 4,
+        "product": "Fogão"
+      },
+      "createdAt": "2026-02-27"
+    },
+    {
+      "id": "279b3663-7ec7-4d4d-86ea-1b6f01d75086",
+      "accountId": 2,
+      "date": "2026-06-27",
+      "type": "expense",
+      "payment_method": "credit",
+      "amount_cents": -25111,
+      "paid": false,
+      "installment": {
+        "parentId": "727494b8-def0-4cf5-807a-e9066b549a3e",
+        "total": 5,
+        "index": 5,
+        "product": "Fogão"
+      },
+      "createdAt": "2026-02-27"
     },
     {
       "accountId": 1,
-      "date": "2026-02-25",
+      "date": "2026-02-27",
       "type": "expense",
-      "payment_method": "credit",
-      "amount_cents": -12,
-      "paid": true,
-      "installment": null,
-      "id": "e3dd0410-15ac-4a4c-a3d1-6cc97b0c36ba",
-      "createdAt": "2026-02-25"
-    },
-    {
-      "accountId": 1,
-      "date": "2026-02-25",
-      "type": "expense",
-      "payment_method": "credit",
-      "amount_cents": -986,
-      "paid": true,
-      "installment": null,
-      "id": "24b90bdf-fae5-4959-8627-96dbb55a7def",
-      "createdAt": "2026-02-25"
-    },
-    {
-      "accountId": 1,
-      "date": "2026-02-25",
-      "type": "expense",
-      "payment_method": "credit",
-      "amount_cents": -29,
-      "paid": true,
-      "installment": null,
-      "id": "3eba0ad6-a8b9-449a-9446-4527b6eb00c2",
-      "createdAt": "2026-02-25"
-    },
-    {
-      "accountId": 1,
-      "date": "2026-02-25",
-      "type": "expense",
-      "payment_method": "credit",
-      "amount_cents": -2466,
-      "paid": true,
-      "installment": null,
-      "id": "5d00aeef-2f91-4723-8485-8467f2028bc9",
-      "createdAt": "2026-02-25"
-    },
-    {
-      "accountId": 1,
-      "date": "2026-02-25",
-      "type": "expense",
-      "payment_method": "credit",
-      "amount_cents": -34555,
-      "paid": true,
-      "installment": null,
-      "id": "60faff4c-f8b9-4960-bac2-7cbe3b79d1c6",
-      "createdAt": "2026-02-25"
-    },
-    {
-      "accountId": 1,
-      "date": "2026-02-25",
-      "type": "expense",
-      "payment_method": "credit",
-      "amount_cents": -9762,
-      "paid": true,
-      "installment": null,
-      "id": "0f4edf42-f770-43ad-a3d1-b95df3586ec2",
-      "createdAt": "2026-02-25"
-    },
-    {
-      "accountId": 1,
-      "date": "2026-02-25",
-      "type": "expense",
-      "payment_method": "credit",
-      "amount_cents": -20000,
-      "paid": true,
-      "installment": null,
-      "id": "01f16af0-29b5-4c3d-8aba-6478d818959a",
-      "createdAt": "2026-02-25"
-    },
-    {
-      "accountId": 1,
-      "date": "2026-02-25",
-      "type": "expense",
-      "payment_method": "credit",
+      "payment_method": "debit",
       "amount_cents": -50000,
-      "description": "5",
+      "description": "PIX Lulu",
       "paid": true,
       "installment": null,
-      "id": "adf50452-c10e-4d55-82f6-c691c81f595d",
-      "createdAt": "2026-02-25"
+      "id": "ae21b8c4-dcb6-4acc-9301-775e6e879934",
+      "createdAt": "2026-02-27"
     },
     {
       "accountId": 1,
-      "date": "2026-02-23",
+      "date": "2026-02-27",
       "type": "expense",
       "payment_method": "credit",
-      "amount_cents": -50000,
-      "paid": true,
-      "installment": null,
-      "id": "6ad18fbd-58de-49b7-8df0-655239fe219d",
-      "createdAt": "2026-02-23"
-    },
-    {
-      "accountId": 1,
-      "date": "2026-04-24",
-      "type": "expense",
-      "payment_method": "credit",
-      "amount_cents": -55555,
+      "amount_cents": -150000,
+      "description": "Mercado",
       "paid": false,
       "installment": null,
-      "id": "6a9cbb64-c92e-4fbc-b85b-930301a7491d",
-      "createdAt": "2026-04-24"
-    },
-    {
-      "accountId": 1,
-      "date": "2026-02-25",
-      "type": "income",
-      "amount_cents": 500000,
-      "paid": true,
-      "installment": null,
-      "id": "130fb9b7-ebae-4199-9685-7dfd9a811e96",
-      "createdAt": "2026-02-25"
-    },
-    {
-      "accountId": 1,
-      "date": "2026-02-21",
-      "type": "expense",
-      "payment_method": "debit",
-      "amount_cents": -140000,
-      "description": "Aluguel",
-      "paid": true,
-      "installment": null,
-      "recurrentId": "61d21622-bd4d-445a-9a23-d4cc20adf3d6",
-      "id": "21c14b75-c41a-4cbb-baa0-ace752791219",
-      "createdAt": "2026-02-26"
-    },
-    {
-      "accountId": 1,
-      "date": "2026-02-26",
-      "type": "expense",
-      "payment_method": "credit",
-      "amount_cents": -12,
-      "paid": true,
-      "installment": null,
-      "id": "1922858e-46ee-4c81-ba1b-d54496aa9ce6",
-      "createdAt": "2026-02-26"
+      "id": "c5a4fc23-83ec-4f16-ade0-d9c05cd6ad50",
+      "createdAt": "2026-02-27"
     }
   ],
-  "recurrents": [
-    {
-      "accountId": 1,
-      "kind": "expense",
-      "payment_method": "debit",
-      "notify": true,
-      "name": "Aluguel",
-      "amount_cents": -140000,
-      "frequency": "monthly",
-      "due_day": 21,
-      "active": true,
-      "id": "61d21622-bd4d-445a-9a23-d4cc20adf3d6"
-    },
-    {
-      "accountId": 1,
-      "kind": "expense",
-      "payment_method": "debit",
-      "notify": true,
-      "name": "Academia",
-      "amount_cents": -25000,
-      "frequency": "monthly",
-      "due_day": 31,
-      "active": true,
-      "id": "6436d2c7-1ed8-4a3e-b755-8c189c3cb5c5"
-    },
-    {
-      "accountId": 1,
-      "kind": "expense",
-      "payment_method": "credit",
-      "notify": false,
-      "name": "Assinatura",
-      "amount_cents": -20000,
-      "frequency": "monthly",
-      "active": true,
-      "id": "3f85c187-9400-4c2f-9aac-9eb0fb4e3aeb"
-    },
-    {
-      "accountId": 1,
-      "kind": "expense",
-      "payment_method": "debit",
-      "notify": true,
-      "name": "Internert",
-      "amount_cents": -10000,
-      "frequency": "monthly",
-      "due_day": 28,
-      "active": true,
-      "id": "c61122c4-1f74-40b0-9239-10026e433c43"
-    },
-    {
-      "accountId": 1,
-      "kind": "expense",
-      "payment_method": "debit",
-      "notify": true,
-      "name": "Aleaz",
-      "amount_cents": -50000,
-      "frequency": "monthly",
-      "due_day": 27,
-      "active": true,
-      "id": "86544bfd-7e8b-4ec8-b24d-e1042f96d3c6"
-    },
-    {
-      "accountId": 1,
-      "kind": "expense",
-      "payment_method": "debit",
-      "notify": true,
-      "name": "Master",
-      "amount_cents": -20000,
-      "frequency": "monthly",
-      "due_day": 26,
-      "active": true,
-      "id": "bbe64dff-725a-4d3f-96cd-9b54981e55a8"
-    },
-    {
-      "accountId": 1,
-      "kind": "income",
-      "notify": false,
-      "name": "asdas",
-      "amount_cents": 50000,
-      "frequency": "monthly",
-      "day_of_month": 10,
-      "active": true,
-      "id": "6ad077b8-82be-4af9-b130-d02dac1290fe"
-    }
-  ],
+  "recurrents": [],
   "investment_positions": [
     {
       "accountId": 1,
@@ -266,207 +334,54 @@
       "investment_type": "fii",
       "asset_code": "MXRF11",
       "is_active": true,
-      "invested_cents": 636943,
-      "id": "d88abc1b-a3e6-47a0-a4b4-1aeb3df261d5",
-      "quantity_total": 628,
-      "avg_cost_cents": 1014
+      "invested_cents": 0,
+      "id": "a130eea6-06f4-43d3-baeb-fae7731c21e0",
+      "quantity_total": 0
+    },
+    {
+      "accountId": 3,
+      "bucket": "fixed",
+      "investment_type": "caixinha",
+      "asset_code": "CAIXINHA",
+      "name": "Dinheiro Guardado",
+      "metadata": {
+        "issuer": "Master",
+        "indexer": "CDI",
+        "rate_mode": "pct_cdi",
+        "rate_percent": 120
+      },
+      "is_active": true,
+      "invested_cents": 0,
+      "id": "59769965-3de7-4e49-ad93-97fd88a25929",
+      "principal_cents": 0,
+      "current_value_cents": 0
     },
     {
       "accountId": 1,
       "bucket": "variable",
       "investment_type": "fii",
-      "asset_code": "SC11",
+      "asset_code": "SCX11",
       "is_active": true,
       "invested_cents": 0,
-      "id": "125dd0a1-97c7-4410-8c46-0dcaff17d8ca",
+      "id": "582f75e4-7ae6-42a5-b99a-2f3f491747fb",
       "quantity_total": 0
     }
   ],
-  "investment_events": [
-    {
-      "positionId": "d88abc1b-a3e6-47a0-a4b4-1aeb3df261d5",
-      "accountId": 1,
-      "date": "2026-02-26",
-      "event_type": "buy",
-      "amount_cents": 542440,
-      "quantity": 568,
-      "unit_price_cents": 955,
-      "id": "82fe2182-2d18-4a50-905f-8f95798a940e"
-    },
-    {
-      "positionId": "d88abc1b-a3e6-47a0-a4b4-1aeb3df261d5",
-      "accountId": 1,
-      "date": "2026-02-26",
-      "event_type": "buy",
-      "amount_cents": 9000,
-      "quantity": 10,
-      "unit_price_cents": 900,
-      "id": "47435e7a-c3fa-466f-b3d7-5f9636ff9255"
-    },
-    {
-      "positionId": "d88abc1b-a3e6-47a0-a4b4-1aeb3df261d5",
-      "accountId": 1,
-      "date": "2026-02-26",
-      "event_type": "buy",
-      "amount_cents": 45000,
-      "quantity": 50,
-      "unit_price_cents": 900,
-      "id": "67f212d9-c3d6-4cf3-866f-52f4898e9b43"
-    },
-    {
-      "positionId": "d88abc1b-a3e6-47a0-a4b4-1aeb3df261d5",
-      "accountId": 1,
-      "date": "2026-02-26",
-      "event_type": "sell",
-      "amount_cents": 50000,
-      "quantity": 10,
-      "unit_price_cents": 5000,
-      "id": "bfbb58e1-69ca-4c94-8629-86c4b277a982"
-    },
-    {
-      "positionId": "d88abc1b-a3e6-47a0-a4b4-1aeb3df261d5",
-      "accountId": 1,
-      "date": "2026-02-26",
-      "event_type": "buy",
-      "amount_cents": 50000,
-      "quantity": 10,
-      "unit_price_cents": 5000,
-      "id": "4ac1e54c-265a-478c-bf73-9fa412964a39"
-    }
-  ],
+  "investment_events": [],
   "history": [
     {
-      "id": "c713d9ba-8d67-4ac7-8995-c86700812542",
-      "accountId": 1,
-      "date": "2026-02-25",
-      "balance_cents": 15000,
-      "note": "Transacao"
-    },
-    {
-      "id": "2b3e4eb7-31fb-4ce4-8a5b-85e2ff486272",
-      "accountId": 1,
-      "date": "2026-02-25",
-      "balance_cents": 14988,
-      "note": "Transacao"
-    },
-    {
-      "id": "5c417a1e-74b6-497e-9950-1c27cfc0f2e1",
-      "accountId": 1,
-      "date": "2026-02-25",
-      "balance_cents": 14002,
-      "note": "Transacao"
-    },
-    {
-      "id": "2fa958f4-ba09-4b9a-bdb1-70bfef1a6be8",
-      "accountId": 1,
-      "date": "2026-02-25",
-      "balance_cents": 13973,
-      "note": "Transacao"
-    },
-    {
-      "id": "0345589f-1160-4c28-a837-d8f9656b2939",
-      "accountId": 1,
-      "date": "2026-02-25",
-      "balance_cents": 11507,
-      "note": "Transacao"
-    },
-    {
-      "id": "a57acbf9-580f-4d46-8e54-f0ffd0bed0d4",
-      "accountId": 1,
-      "date": "2026-02-25",
-      "balance_cents": -23048,
-      "note": "Transacao"
-    },
-    {
-      "id": "25c5bebe-e3f5-45ab-b8d6-7afe7c6b7851",
-      "accountId": 1,
-      "date": "2026-02-25",
-      "balance_cents": -32810,
-      "note": "Transacao"
-    },
-    {
-      "id": "438d23f5-76fd-4e38-b855-ecc8a343c285",
-      "accountId": 1,
-      "date": "2026-02-25",
-      "balance_cents": -52810,
-      "note": "Transacao"
-    },
-    {
-      "id": "2626b45d-2660-4d4c-a98b-a7120b9d2765",
-      "accountId": 1,
-      "date": "2026-02-25",
-      "balance_cents": -102810,
-      "note": "5"
-    },
-    {
-      "id": "7285abbe-6c40-4647-b12e-3f48c8fb50bd",
-      "accountId": 1,
-      "date": "2026-02-25",
-      "balance_cents": -152810,
-      "note": "Transacao"
-    },
-    {
-      "id": "7162f8ae-70c0-43db-831c-045b21a1ab65",
-      "accountId": 1,
-      "date": "2026-02-25",
-      "balance_cents": 347190,
-      "note": "Transacao"
-    },
-    {
-      "id": "7eb2ad97-e5ea-420a-896c-b02186a96f5f",
-      "accountId": 1,
-      "date": "2026-02-26",
-      "balance_cents": 297190,
-      "note": "Saída transferência - Salário enviado para lá"
-    },
-    {
-      "id": "8378cbb6-8bf1-485d-b769-79c0bd884583",
+      "id": "00542853-1977-4c85-abdc-3515c8833f01",
       "accountId": 2,
-      "date": "2026-02-26",
-      "balance_cents": 55000,
-      "note": "Entrada transferência - Salário enviado para lá"
+      "date": "2026-02-27",
+      "balance_cents": 24889,
+      "note": "Parcela 1/5 - Fogão"
     },
     {
-      "id": "1527a705-4a72-48a6-a4ca-1313b5f615c3",
+      "id": "cdaf184f-02c0-44dd-943e-187516295fe7",
       "accountId": 1,
-      "date": "2026-02-26",
-      "balance_cents": 297185,
-      "note": "Saída transferência - Transferência entre contas"
-    },
-    {
-      "id": "0a4cebab-4aa2-4ce0-9c99-c5180d01dcb8",
-      "accountId": 2,
-      "date": "2026-02-26",
-      "balance_cents": 55005,
-      "note": "Entrada transferência - Transferência entre contas"
-    },
-    {
-      "id": "40ea6be9-5f93-4288-92b7-9b8920ee4689",
-      "accountId": 1,
-      "date": "2026-02-26",
-      "balance_cents": 347185,
-      "note": "Venda investimento"
-    },
-    {
-      "id": "986b9404-8409-423e-a7ce-4303fd8fc6d7",
-      "accountId": 1,
-      "date": "2026-02-26",
-      "balance_cents": 297185,
-      "note": "Compra investimento"
-    },
-    {
-      "id": "2cd70c4b-a6a8-415d-bb9e-dfce9297560e",
-      "accountId": 1,
-      "date": "2026-02-26",
-      "balance_cents": 157185,
-      "note": "Aluguel"
-    },
-    {
-      "id": "91d85813-10a4-4572-abdc-f1bc84e9e8a2",
-      "accountId": 1,
-      "date": "2026-02-26",
-      "balance_cents": 157173,
-      "note": "Ajuste edicao - Transacao"
+      "date": "2026-02-27",
+      "balance_cents": 4950000,
+      "note": "PIX Lulu"
     }
   ]
 }

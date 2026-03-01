@@ -42,6 +42,29 @@ const COLLECTIONS = [
   { key: 'history', path: '/history' },
 ] as const
 
+type CollectionKey = (typeof COLLECTIONS)[number]['key']
+
+export type BackupCollectionKey = CollectionKey
+
+export interface ExportBackupProgressEvent {
+  stage: 'collecting-data' | 'generating-file' | 'completed'
+}
+
+export interface ReplaceBackupProgressEvent {
+  stage: 'validating' | 'collecting-current' | 'deleting-collection' | 'inserting-collection' | 'completed'
+  collectionKey?: BackupCollectionKey
+  collectionIndex?: number
+  collectionTotal?: number
+}
+
+interface ExportBackupOptions {
+  onProgress?: (event: ExportBackupProgressEvent) => void
+}
+
+interface ReplaceBackupOptions {
+  onProgress?: (event: ReplaceBackupProgressEvent) => void
+}
+
 const persistedAccountSchema = accountSchema.passthrough().extend({
   id: z.number().int(),
 })
@@ -260,8 +283,11 @@ export async function collectBackupData(): Promise<BackupData> {
   }
 }
 
-export async function exportBackupJson() {
+export async function exportBackupJson(options: ExportBackupOptions = {}) {
+  options.onProgress?.({ stage: 'collecting-data' })
   const data = await collectBackupData()
+  options.onProgress?.({ stage: 'generating-file' })
+
   const backup: BackupEnvelope = {
     version: 1,
     exported_at: new Date().toISOString(),
@@ -270,25 +296,34 @@ export async function exportBackupJson() {
 
   const filename = `financeiro-backup-${nowISO()}.json`
   downloadTextFile(JSON.stringify(backup, null, 2), filename, 'application/json')
+  options.onProgress?.({ stage: 'completed' })
 
   return filename
 }
 
-export async function replaceDataWithBackup(data: BackupData) {
+export async function replaceDataWithBackup(data: BackupData, options: ReplaceBackupOptions = {}) {
+  options.onProgress?.({ stage: 'validating' })
   validateRelations(data)
 
+  options.onProgress?.({ stage: 'collecting-current' })
   const currentData = await collectBackupData()
 
   const deleteOrder: Array<(typeof COLLECTIONS)[number]> = [
-    COLLECTIONS[4], // investment_events
-    COLLECTIONS[3], // investment_positions
     COLLECTIONS[1], // transactions
     COLLECTIONS[2], // recurrents
+    COLLECTIONS[4], // investment_events
+    COLLECTIONS[3], // investment_positions
     COLLECTIONS[5], // history
     COLLECTIONS[0], // accounts
   ]
 
-  for (const collection of deleteOrder) {
+  for (const [index, collection] of deleteOrder.entries()) {
+    options.onProgress?.({
+      stage: 'deleting-collection',
+      collectionKey: collection.key,
+      collectionIndex: index + 1,
+      collectionTotal: deleteOrder.length,
+    })
     const items = currentData[collection.key]
     for (const item of items) {
       await apiDelete(`${collection.path}/${item.id}`)
@@ -304,12 +339,20 @@ export async function replaceDataWithBackup(data: BackupData) {
     COLLECTIONS[5], // history
   ]
 
-  for (const collection of insertOrder) {
+  for (const [index, collection] of insertOrder.entries()) {
+    options.onProgress?.({
+      stage: 'inserting-collection',
+      collectionKey: collection.key,
+      collectionIndex: index + 1,
+      collectionTotal: insertOrder.length,
+    })
     const items = data[collection.key]
     for (const item of items) {
       await apiPost(collection.path, item)
     }
   }
+
+  options.onProgress?.({ stage: 'completed' })
 }
 
 export function summarizeBackup(data: BackupData) {

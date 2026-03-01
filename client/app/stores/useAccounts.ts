@@ -36,37 +36,70 @@ export const useAccountsStore = defineStore('accounts', () => {
     await historyStore.appendHistory(accountId, newBalance, note)
   }
 
-  async function deleteAccount(accountId: number) {
-    const [txFromAccount, txToAccount, recurrents, historyItems] = await Promise.all([
+  async function deleteAccount(accountId: number, onProgress?: (step: string) => void) {
+    const [txFromAccount, txToAccount, recurrents, historyItems, investmentPositions, eventsByAccount] = await Promise.all([
       apiGet<Array<{ id: string, accountId: number }>>('/transactions', { accountId: String(accountId) }),
       apiGet<Array<{ id: string, destinationAccountId?: number }>>('/transactions', { destinationAccountId: String(accountId) }),
       apiGet<Array<{ id: string, accountId: number }>>('/recurrents', { accountId: String(accountId) }),
       apiGet<Array<{ id: string, accountId: number }>>('/history', { accountId: String(accountId) }),
+      apiGet<Array<{ id: string, accountId: number }>>('/investment_positions', { accountId: String(accountId) }),
+      apiGet<Array<{ id: string, accountId: number }>>('/investment_events', { accountId: String(accountId) }),
     ])
 
     const txMap = new Map<string, { id: string }>()
     for (const tx of txFromAccount) txMap.set(tx.id, tx)
     for (const tx of txToAccount) txMap.set(tx.id, tx)
 
-    for (const tx of txMap.values()) {
-      await apiDelete(`/transactions/${tx.id}`)
+    const eventsByPosition = await Promise.all(
+      investmentPositions.map(position =>
+        apiGet<Array<{ id: string, positionId: string }>>('/investment_events', { positionId: position.id }),
+      ),
+    )
+
+    const eventMap = new Map<string, { id: string }>()
+    for (const event of eventsByAccount) eventMap.set(event.id, event)
+    for (const events of eventsByPosition) {
+      for (const event of events) {
+        eventMap.set(event.id, event)
+      }
     }
 
-    for (const rec of recurrents) {
-      await apiDelete(`/recurrents/${rec.id}`)
-    }
+    onProgress?.('Excluindo eventos de investimento...')
+    await Promise.all(
+      [...eventMap.values()].map(event => apiDelete(`/investment_events/${event.id}`)),
+    )
 
-    for (const item of historyItems) {
-      await apiDelete(`/history/${item.id}`)
-    }
+    onProgress?.('Excluindo posicoes...')
+    await Promise.all(
+      investmentPositions.map(position => apiDelete(`/investment_positions/${position.id}`)),
+    )
 
+    onProgress?.('Excluindo transacoes...')
+    await Promise.all(
+      [...txMap.values()].map(tx => apiDelete(`/transactions/${tx.id}`)),
+    )
+
+    onProgress?.('Excluindo recorrentes...')
+    await Promise.all(
+      recurrents.map(rec => apiDelete(`/recurrents/${rec.id}`)),
+    )
+
+    onProgress?.('Excluindo historico...')
+    await Promise.all(
+      historyItems.map(item => apiDelete(`/history/${item.id}`)),
+    )
+
+    onProgress?.('Removendo conta...')
     await apiDelete(`/accounts/${accountId}`)
     accounts.value = accounts.value.filter(account => account.id !== accountId)
+    onProgress?.('Concluido!')
 
     return {
       transactionsDeleted: txMap.size,
       recurrentsDeleted: recurrents.length,
       historyDeleted: historyItems.length,
+      investmentPositionsDeleted: investmentPositions.length,
+      investmentEventsDeleted: eventMap.size,
     }
   }
 

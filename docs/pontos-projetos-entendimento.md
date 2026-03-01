@@ -1,0 +1,1 @@
+Fechamento dia 28 e vencimento dia 5. Suppondo que estamos em fevereiro, isso significa que o fechamento é dia 28/02 e o vencimento é dia 05/03

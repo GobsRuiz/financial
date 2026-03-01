@@ -105,8 +105,6 @@ const recurrentsStore = useRecurrentsStore()
 const investmentPositionsStore = useInvestmentPositionsStore()
 const investmentEventsStore = useInvestmentEventsStore()
 const { groupedAlerts, counts } = useAlerts()
-const route = useRoute()
-const router = useRouter()
 
 const loading = ref(true)
 const refreshing = ref(false)
@@ -115,7 +113,6 @@ const selectedMonth = ref(monthKey(dayjs().format('YYYY-MM-DD')))
 const activeChartTab = ref<'flow' | 'type' | 'status'>('flow')
 const investmentPeriodTab = ref<'month' | 'year' | 'all'>('month')
 const hasSuccessfulDataLoad = ref(false)
-const monthStorageKey = 'dashboard:selected-month'
 
 const sourceLoaders = [
   { label: 'contas', load: () => accountsStore.loadAccounts() },
@@ -125,56 +122,18 @@ const sourceLoaders = [
   { label: 'lancamentos de investimentos', load: () => investmentEventsStore.loadEvents() },
 ]
 
-function parseMonthQuery(value: unknown): string | null {
-  if (typeof value !== 'string') return null
-  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(value)) return null
-  return value
-}
-
-function readStoredMonth(): string | null {
-  if (typeof window === 'undefined') return null
-
-  const raw = window.localStorage.getItem(monthStorageKey)
-  return parseMonthQuery(raw)
-}
-
-function writeStoredMonth(month: string) {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(monthStorageKey, month)
-}
-
-const currentMonthFallback = monthKey(dayjs().format('YYYY-MM-DD'))
-
-watch(() => route.query.mes, (queryMonth) => {
-  const parsed = parseMonthQuery(queryMonth)
-  const next = parsed ?? readStoredMonth() ?? currentMonthFallback
-  if (selectedMonth.value !== next) {
-    selectedMonth.value = next
-  }
-}, { immediate: true })
-
-watch(selectedMonth, (month) => {
-  writeStoredMonth(month)
-
-  const routeMonth = parseMonthQuery(route.query.mes)
-  if (routeMonth === month) return
-
-  void router.replace({
-    query: {
-      ...route.query,
-      mes: month,
-    },
-  }).catch((error) => {
-    console.error('Erro ao atualizar mes na URL:', error)
-  })
-})
-
 const hasFatalLoadError = computed(() =>
   loadFailedSources.value.length === sourceLoaders.length && !hasSuccessfulDataLoad.value,
 )
 
 const hasPartialLoadError = computed(() =>
   loadFailedSources.value.length > 0 && !hasFatalLoadError.value,
+)
+
+const showFirstUseEmptyState = computed(() =>
+  !hasPartialLoadError.value
+  && accountsStore.accounts.length === 0
+  && transactionsStore.transactions.length === 0,
 )
 
 const loadErrorMessage = computed(() => {
@@ -221,20 +180,6 @@ async function loadDashboardData() {
 }
 
 onMounted(async () => {
-  const routeMonth = parseMonthQuery(route.query.mes)
-  if (routeMonth !== selectedMonth.value) {
-    try {
-      await router.replace({
-        query: {
-          ...route.query,
-          mes: selectedMonth.value,
-        },
-      })
-    } catch (error) {
-      console.error('Erro ao sincronizar mes na URL:', error)
-    }
-  }
-
   await loadDashboardData()
 })
 
@@ -262,6 +207,7 @@ function nextMonth() {
 function entriesForMonth(targetMonth: string): number {
   return (transactionsStore.transactions as DashboardTx[]).reduce((sum: number, tx: DashboardTx) => {
     if (!belongsToMonth(tx.date, targetMonth)) return sum
+    if (tx.type === 'transfer') return sum
     if (tx.amount_cents <= 0) return sum
     return sum + tx.amount_cents
   }, 0)
@@ -270,6 +216,7 @@ function entriesForMonth(targetMonth: string): number {
 function expensesForMonth(targetMonth: string): number {
   return (transactionsStore.transactions as DashboardTx[]).reduce((sum: number, tx: DashboardTx) => {
     if (!belongsToMonth(tx.date, targetMonth)) return sum
+    if (tx.type === 'transfer') return sum
     if (tx.amount_cents >= 0) return sum
     return sum + Math.abs(tx.amount_cents)
   }, 0)
@@ -409,6 +356,7 @@ const flowByWeek = computed<WeeklyFlow[]>(() => {
   })
 
   for (const tx of monthTransactions.value) {
+    if (tx.type === 'transfer') continue
     const day = Number.parseInt(tx.date.slice(8, 10), 10)
     if (!Number.isFinite(day) || day < 1) continue
 
@@ -456,6 +404,7 @@ const expenseByMethod = computed(() => {
   let other = 0
 
   for (const tx of monthTransactions.value) {
+    if (tx.type === 'transfer') continue
     if (tx.amount_cents >= 0) continue
 
     const amount = Math.abs(tx.amount_cents)
@@ -570,6 +519,7 @@ const expensePaymentStatus = computed(() => {
   let pendingCount = 0
 
   for (const tx of monthTransactions.value) {
+    if (tx.type === 'transfer') continue
     if (tx.amount_cents >= 0) continue
     const amount = Math.abs(tx.amount_cents)
 
@@ -1163,7 +1113,7 @@ function alertBucketClass(bucket: AlertBucket): string {
 }
 
 function isIncomeAlert(item: AlertItem): boolean {
-  return item.kind === 'recurrent' && item.subtitle.toLowerCase().includes('receita')
+  return item.kind === 'income'
 }
 
 function formatAlertAmount(item: AlertItem): string {
@@ -1176,7 +1126,7 @@ function alertAmountClass(item: AlertItem): string {
 }
 
 function alertIcon(item: AlertItem) {
-  if (item.kind === 'invoice_due' || item.kind === 'invoice_closing') {
+  if (item.alertType === 'invoice_due' || item.alertType === 'invoice_closing') {
     return CreditCard
   }
   return BellRing
@@ -1359,6 +1309,26 @@ function txDateLabel(isoDate: string): string {
         </CardContent>
       </Card>
 
+      <template v-if="showFirstUseEmptyState">
+        <Card class="border-primary/30 bg-gradient-to-br from-card via-card to-primary/5">
+          <CardHeader class="space-y-2">
+            <CardTitle class="text-xl">Primeiros passos no Financeiro</CardTitle>
+            <CardDescription>
+              Nenhuma conta ou movimentacao encontrada. Comece cadastrando sua primeira conta para liberar o dashboard.
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="flex flex-col gap-2 sm:flex-row">
+            <Button as-child>
+              <NuxtLink to="/contas">Cadastrar primeira conta</NuxtLink>
+            </Button>
+            <Button as-child variant="outline">
+              <NuxtLink to="/settings">Importar backup</NuxtLink>
+            </Button>
+          </CardContent>
+        </Card>
+      </template>
+
+      <template v-else>
       <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <Card class="xl:col-span-2 border-primary/20 bg-gradient-to-br from-card via-card to-primary/5 shadow-sm">
           <CardHeader class="pb-2">
@@ -1927,6 +1897,7 @@ function txDateLabel(isoDate: string): string {
           </CardContent>
         </Card>
       </div>
+      </template>
     </template>
   </div>
 </template>

@@ -35,6 +35,19 @@ function centsToBRLDisplay(cents: number): string {
   return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(cents) / 100)
 }
 
+function formatQuantityDisplay(quantity: number): string {
+  return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 8 }).format(quantity)
+}
+
+function parseOptionalRecurringDay(value: string, fieldLabel: string): number | undefined {
+  if (!value) return undefined
+  const day = Number(value)
+  if (!Number.isInteger(day) || day < 1 || day > 31) {
+    throw new Error(`${fieldLabel} deve ser um dia entre 1 e 31`)
+  }
+  return day
+}
+
 // ── Form Transação ──
 const txForm = reactive({
   type: 'expense' as 'expense' | 'income' | 'transfer',
@@ -136,6 +149,12 @@ const showPaidStatusCheckbox = computed(() =>
   && txForm.payment_method === 'credit',
 )
 
+const showInstallmentSection = computed(() =>
+  !isEdit.value
+  && txForm.type === 'expense'
+  && txForm.payment_method === 'credit',
+)
+
 watch(() => invForm.positionId, () => {
   const position = selectedPosition.value
   if (!position) return
@@ -210,8 +229,16 @@ watch(() => [recForm.kind, recForm.payment_method], () => {
 })
 
 // Resetar conta ao trocar método (pode ter ficado conta sem cartão)
-watch(() => txForm.payment_method, () => {
-  if (txForm.payment_method === 'credit') {
+watch(() => txForm.payment_method, (method) => {
+  if (method !== 'credit') {
+    txForm.parcelado = false
+    txForm.totalParcelas = ''
+    txForm.produto = ''
+    txForm.valorParcela = ''
+    return
+  }
+
+  if (method === 'credit') {
     const account = accountsStore.accounts.find(a => a.id === txForm.accountId)
     if (account && !account.card_closing_day) {
       txForm.accountId = null
@@ -221,9 +248,9 @@ watch(() => txForm.payment_method, () => {
 
 // Auto-calcular valor da parcela quando valor total ou nº de parcelas mudar
 watch(() => [txForm.amount, txForm.totalParcelas], () => {
-  if (!txForm.parcelado || !txForm.amount || !txForm.totalParcelas) return
-  const total = parseInt(txForm.totalParcelas)
-  if (!total || total < 2) return
+  if (!showInstallmentSection.value || !txForm.parcelado || !txForm.amount || !txForm.totalParcelas) return
+  const total = Number(txForm.totalParcelas)
+  if (!Number.isInteger(total) || total < 2 || total > 72) return
   const cents = parseBRLToCents(txForm.amount)
   const parcelaCents = Math.round(cents / total)
   txForm.valorParcela = centsToBRLDisplay(parcelaCents)
@@ -332,6 +359,7 @@ async function submitTransacao() {
   if (!txForm.date) throw new Error('Informe a data')
 
   const cents = parseBRLToCents(txForm.amount)
+  if (cents <= 0) throw new Error('Valor deve ser maior que R$ 0,00')
 
   // ── Transferência ──
   if (txForm.type === 'transfer') {
@@ -407,9 +435,11 @@ async function submitTransacao() {
       description: txForm.description || undefined,
       paid,
     })
-  } else if (txForm.parcelado) {
-    const total = parseInt(txForm.totalParcelas)
-    if (!total || total < 2) throw new Error('Mínimo 2 parcelas')
+  } else if (txForm.parcelado && txForm.payment_method === 'credit') {
+    const total = Number(txForm.totalParcelas)
+    if (!Number.isInteger(total)) throw new Error('Numero de parcelas deve ser inteiro')
+    if (total < 2) throw new Error('Mínimo 2 parcelas')
+    if (total > 72) throw new Error('Máximo de 72 parcelas')
     if (!txForm.produto) throw new Error('Informe o produto')
     if (!txForm.valorParcela) throw new Error('Informe o valor da parcela')
 
@@ -421,6 +451,7 @@ async function submitTransacao() {
       date: txForm.date,
       type: txForm.type,
       payment_method,
+      totalAmountCents: amount_cents,
       installmentAmountCents,
       description: txForm.description || undefined,
       product: txForm.produto,
@@ -465,7 +496,7 @@ async function submitRecorrente() {
   if (recForm.kind === 'expense' && recForm.payment_method === 'credit') {
     const account = accountsStore.accounts.find(a => a.id === recForm.accountId)
     if (!account || (!account.card_closing_day && !account.card_due_day)) {
-      throw new Error('Selecione uma conta com cartao configurado')
+      throw new Error('Selecione uma conta com cartão configurado')
     }
   }
 
@@ -474,12 +505,12 @@ async function submitRecorrente() {
   const amount_cents = recForm.kind === 'expense' ? -cents : cents
   const payment_method = recForm.kind === 'expense' ? recForm.payment_method : undefined
   const due_day =
-    recForm.kind === 'expense' && recForm.payment_method === 'debit' && recForm.due_day
-      ? parseInt(recForm.due_day)
+    recForm.kind === 'expense' && recForm.payment_method === 'debit'
+      ? parseOptionalRecurringDay(recForm.due_day, 'Vencimento')
       : undefined
   const day_of_month =
-    recForm.kind === 'income' && recForm.day_of_month
-      ? parseInt(recForm.day_of_month)
+    recForm.kind === 'income'
+      ? parseOptionalRecurringDay(recForm.day_of_month, 'Recebimento')
       : undefined
 
   if (props.editRecurrent) {
@@ -517,17 +548,25 @@ async function submitInvestimento() {
   if (!invForm.positionId) throw new Error('Selecione uma posição')
   if (!invForm.date) throw new Error('Informe a data')
   if (!invForm.amount) throw new Error('Informe o valor total')
+  const amountCents = parseBRLToCents(invForm.amount)
+  if (amountCents <= 0) throw new Error('Valor deve ser maior que R$ 0,00')
 
   const position = selectedPosition.value
   if (!position) throw new Error('Ativo inválido')
 
   if (position.investment_type === 'caixinha' && invForm.event_type === 'maturity') {
-    throw new Error('Evento vencimento nao esta disponivel para caixinha')
+    throw new Error('Evento vencimento não está disponível para caixinha')
   }
 
   if (position.bucket === 'variable' && (invForm.event_type === 'buy' || invForm.event_type === 'sell')) {
     const qty = Number(invForm.quantity.replace(',', '.'))
     if (!Number.isFinite(qty) || qty <= 0) throw new Error('Informe a quantidade')
+    if (invForm.event_type === 'sell') {
+      const availableQty = position.quantity_total ?? 0
+      if (qty > availableQty) {
+        throw new Error(`Voce possui apenas ${formatQuantityDisplay(availableQty)} cotas`)
+      }
+    }
   }
 
   await eventsStore.addEvent({
@@ -535,7 +574,7 @@ async function submitInvestimento() {
     accountId: position.accountId,
     date: invForm.date,
     event_type: invForm.event_type,
-    amount_cents: parseBRLToCents(invForm.amount),
+    amount_cents: amountCents,
     quantity: invForm.quantity ? Number(invForm.quantity.replace(',', '.')) : undefined,
     unit_price_cents: invForm.unit_price ? parseBRLToCents(invForm.unit_price) : undefined,
     fees_cents: invForm.fees ? parseBRLToCents(invForm.fees) : undefined,
@@ -691,7 +730,7 @@ const recPaymentMethodOptions = [
             </div>
           </div>
 
-          <div v-if="!isEdit && txForm.type === 'expense'" class="space-y-3">
+          <div v-if="showInstallmentSection" class="space-y-3 mt-3">
             <div class="flex items-center gap-2">
               <Checkbox v-model="txForm.parcelado" />
               <Label>Parcelado</Label>
@@ -700,7 +739,7 @@ const recPaymentMethodOptions = [
             <div v-if="txForm.parcelado" class="grid grid-cols-3 gap-4 pl-6">
               <div class="space-y-2">
                 <Label>Total de Parcelas *</Label>
-                <Input v-model="txForm.totalParcelas" placeholder="Ex: 10" type="number" min="2" />
+                <Input v-model="txForm.totalParcelas" placeholder="Ex: 10" type="number" min="2" max="72" step="1" />
               </div>
               <div class="space-y-2">
                 <Label>Valor da Parcela *</Label>
@@ -763,7 +802,7 @@ const recPaymentMethodOptions = [
             class="space-y-2"
           >
             <Label>Vencimento (dia)</Label>
-            <Input v-model="recForm.due_day" placeholder="1-31" type="number" min="1" max="31" />
+            <Input v-model="recForm.due_day" placeholder="1-31" type="number" min="1" max="31" step="1" />
           </div>
 
           <div
@@ -771,7 +810,7 @@ const recPaymentMethodOptions = [
             class="space-y-2"
           >
             <Label>Recebimento (dia)</Label>
-            <Input v-model="recForm.day_of_month" placeholder="1-31" type="number" min="1" max="31" />
+            <Input v-model="recForm.day_of_month" placeholder="1-31" type="number" min="1" max="31" step="1" />
           </div>
 
           <div class="col-span-2 space-y-2">
@@ -780,11 +819,12 @@ const recPaymentMethodOptions = [
           </div>
         </div>
 
-        <div class="flex items-center gap-6">
+        <div class="flex items-center gap-6 mt-4">
           <div v-if="showRecNotify" class="flex items-center gap-2">
             <Checkbox v-model="recForm.notify" />
             <Label>Notificar</Label>
           </div>
+          
           <div class="flex items-center gap-2">
             <Checkbox v-model="recForm.active" />
             <Label>Ativo</Label>
@@ -825,6 +865,12 @@ const recPaymentMethodOptions = [
             <div class="space-y-2">
               <Label>Quantidade *</Label>
               <Input v-model="invForm.quantity" placeholder="Ex: 10" />
+              <p
+                v-if="invForm.event_type === 'sell'"
+                class="text-xs text-muted-foreground"
+              >
+                Disponivel: {{ formatQuantityDisplay(selectedPosition.quantity_total ?? 0) }} cotas
+              </p>
             </div>
             <div class="space-y-2">
               <Label>Preço Unitário</Label>
